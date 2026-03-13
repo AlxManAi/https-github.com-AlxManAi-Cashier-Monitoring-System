@@ -1,0 +1,5 @@
+{
+  "name": "Cashier Monitoring System",
+  "description": "A prototype for a cashier monitoring system with real-time alerts, incident logs, and technical metrics.",
+  "requestFramePermissions": []
+}
