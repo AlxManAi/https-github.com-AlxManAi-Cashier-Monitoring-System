@@ -25,10 +25,10 @@ const ModelDetails: React.FC<ModelDetailsProps> = ({ model }) => {
   };
 
   return (
-    <div className="bg-[#1e293b] border border-zinc-800 rounded-lg p-6 h-full flex flex-col">
+    <div className="bg-[#1e293b] border border-zinc-800 rounded-lg p-4 md:p-6 h-full flex flex-col">
       <div className="mb-6">
-        <h2 className="text-[#e5e7eb] text-2xl font-bold mb-1">
-          {model.name} <span className="text-[#9ca3af] font-normal text-lg">({model.version})</span>
+        <h2 className="text-[#e5e7eb] text-xl md:text-2xl font-bold mb-1">
+          {model.name} <span className="text-[#9ca3af] font-normal text-base md:text-lg">({model.version})</span>
         </h2>
         <div className="text-[#38bdf8] text-sm font-medium">
           {typeLabels[model.type] || model.type}
@@ -57,13 +57,13 @@ const ModelDetails: React.FC<ModelDetailsProps> = ({ model }) => {
 
         <div>
           <h4 className="text-[#9ca3af] text-[10px] uppercase font-bold tracking-widest mb-2">Статус</h4>
-          <div className="text-xl font-bold uppercase tracking-wider text-[#38bdf8]">
+          <div className="text-lg md:text-xl font-bold uppercase tracking-wider text-[#38bdf8]">
             {model.status}
           </div>
         </div>
       </div>
 
-      <div className="mt-auto pt-6 border-t border-zinc-800 flex gap-3">
+      <div className="mt-auto pt-6 border-t border-zinc-800 flex flex-col sm:flex-row gap-3">
         <button 
           onClick={() => alert("Функция недоступна в демо")}
           className="flex-1 bg-[#38bdf8] hover:bg-[#0ea5e9] text-[#0f172a] font-bold py-2.5 rounded transition-colors text-sm"

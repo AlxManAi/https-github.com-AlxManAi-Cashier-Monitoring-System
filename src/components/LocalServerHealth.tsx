@@ -101,19 +101,19 @@ const LocalServerHealth: React.FC = () => {
       </div>
 
       {/* Security & Offline Status */}
-      <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="bg-emerald-500/20 p-3 rounded-full">
-            <ShieldCheck className="w-6 h-6 text-emerald-400" />
+      <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="bg-emerald-500/20 p-2 sm:p-3 rounded-full shrink-0">
+            <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
           </div>
           <div>
-            <h4 className="font-bold text-white">Режим "Air-Gap" Активен</h4>
-            <p className="text-sm text-zinc-400">Система работает полностью автономно. Внешние соединения заблокированы.</p>
+            <h4 className="font-bold text-white text-sm sm:text-base">Режим "Air-Gap" Активен</h4>
+            <p className="text-xs sm:text-sm text-zinc-400">Система работает полностью автономно. Внешние соединения заблокированы.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
-          <Database className="w-4 h-4 text-emerald-400" />
-          <span className="text-xs font-bold text-emerald-400 uppercase">Local SQLite Mode</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/30 self-start sm:self-auto">
+          <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+          <span className="text-[10px] sm:text-xs font-bold text-emerald-400 uppercase">Local SQLite Mode</span>
         </div>
       </div>
     </div>

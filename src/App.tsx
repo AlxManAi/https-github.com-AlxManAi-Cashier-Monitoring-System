@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Shield, 
   AlertCircle, 
@@ -17,11 +17,14 @@ import {
   Info,
   Play,
   Clock,
-  Layers
+  Layers,
+  Upload,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ModelsPanel from './components/ModelsPanel';
 import LocalServerHealth from './components/LocalServerHealth';
+import RealTimeAnalyzer from './components/RealTimeAnalyzer';
 
 // --- Types ---
 interface Incident {
@@ -68,8 +71,40 @@ const Badge = ({ level }: { level: Incident['level'] }) => {
   );
 };
 
-const MonitoringTab = ({ onSwitchTab, mode }: { onSwitchTab: (tab: string) => void, mode: 'demo' | 'realtime' }) => {
+const MonitoringTab = ({ 
+  onSwitchTab, 
+  mode, 
+  customVideoUrl, 
+  setCustomVideoUrl,
+  onAlert,
+  incidents,
+  alertFlash
+}: { 
+  onSwitchTab: (tab: string) => void, 
+  mode: 'demo' | 'realtime',
+  customVideoUrl: string | null,
+  setCustomVideoUrl: (url: string | null) => void,
+  onAlert: (alert: { type: string; level: 'Critical' | 'High' | 'Medium'; cashier: string }) => void,
+  incidents: Incident[],
+  alertFlash?: boolean
+}) => {
   const [demoTime, setDemoTime] = useState(120);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (customVideoUrl) {
+        URL.revokeObjectURL(customVideoUrl);
+      }
+      const url = URL.createObjectURL(file);
+      setCustomVideoUrl(url);
+    }
+  };
+
+  const triggerFileSelect = () => {
+    fileInputRef.current?.click();
+  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -78,23 +113,23 @@ const MonitoringTab = ({ onSwitchTab, mode }: { onSwitchTab: (tab: string) => vo
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 sm:gap-6">
       {/* Left Column: Video */}
       <div className="lg:col-span-7 space-y-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+          <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
             <Camera className="w-5 h-5 text-blue-400" />
             Видеопоток: Касса №4
           </h2>
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${mode === 'realtime' ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} />
-            <span className="text-xs text-zinc-500 font-mono uppercase tracking-wider">
+            <span className="text-[10px] sm:text-xs text-zinc-500 font-mono uppercase tracking-wider">
               {mode === 'realtime' ? 'LIVE • 1080p' : 'ARCHIVE • 1080p'}
             </span>
           </div>
         </div>
         
-        <div className="aspect-video bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800 relative group">
+        <div className={`aspect-video bg-zinc-900 rounded-lg overflow-hidden border relative group transition-colors duration-300 ${alertFlash ? 'border-red-500 ring-2 ring-red-500/50' : 'border-zinc-800'}`}>
           {mode === 'realtime' ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90">
               <div className="relative">
@@ -105,51 +140,94 @@ const MonitoringTab = ({ onSwitchTab, mode }: { onSwitchTab: (tab: string) => vo
               <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Protocol: RTSP/ONVIF</p>
             </div>
           ) : (
-            <iframe 
-              src="https://drive.google.com/file/d/1fMF-zUDpuX9aWu1lwX7ki4Gx-r5NWR52/preview" 
-              className="w-full h-full border-0"
-              allow="autoplay"
-              referrerPolicy="no-referrer"
-            ></iframe>
+            <RealTimeAnalyzer 
+              videoUrl={customVideoUrl || "https://storage.googleapis.com/mediapipe-assets/business-person-working-on-laptop.mp4"} 
+              isActive={mode === 'demo'} 
+              onAlert={onAlert}
+            />
           )}
-          <div className="absolute top-4 left-4 bg-black/60 px-2 py-1 rounded text-[10px] font-mono text-green-400 border border-green-500/30 pointer-events-none">
+          <div className="absolute top-4 left-4 bg-black/60 px-2 py-1 rounded text-[10px] font-mono text-green-400 border border-green-500/30 pointer-events-none z-20">
             DETECTOR ACTIVE: 98% CONF
           </div>
         </div>
 
         {mode === 'demo' && (
-          <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Текущее время демо
-              </label>
-              <span className="text-sm font-mono text-blue-400">{formatTime(demoTime)} / 09:00</span>
+          <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <Play className="w-4 h-4 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-zinc-200">Демонстрационный архив</h3>
+                  <p className="text-xs text-zinc-500">Анализ записанного видеоматериала</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  accept="video/*" 
+                  className="hidden" 
+                />
+                <button 
+                  onClick={triggerFileSelect}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md text-xs font-medium transition-colors border border-zinc-700"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {customVideoUrl ? 'Сменить видео' : 'Загрузить свое видео'}
+                </button>
+                
+                {customVideoUrl && (
+                  <button 
+                    onClick={() => {
+                      if (customVideoUrl) URL.revokeObjectURL(customVideoUrl);
+                      setCustomVideoUrl(null);
+                    }}
+                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
+                    title="Сбросить"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
-            <input 
-              type="range" 
-              min="0" 
-              max="540" 
-              value={demoTime} 
-              onChange={(e) => setDemoTime(parseInt(e.target.value))}
-              className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Текущее время демо
+                </label>
+                <span className="text-sm font-mono text-blue-400">{formatTime(demoTime)} / 09:00</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="540" 
+                value={demoTime} 
+                onChange={(e) => setDemoTime(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+            </div>
           </div>
         )}
       </div>
 
       {/* Right Column: Alerts */}
       <div className="lg:col-span-3 space-y-4">
-        <h2 className="text-xl font-semibold flex items-center gap-2 mb-2">
+        <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2 mb-2">
           <AlertCircle className="w-5 h-5 text-red-400" />
           Активные алерты
         </h2>
         
-        <div className="space-y-3">
-          {MOCK_INCIDENTS.slice(0, 4).map((alert) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+          {incidents.slice(0, 4).map((alert) => (
             <div 
               key={alert.id}
-              className={`p-4 rounded-lg border-l-4 bg-zinc-900 border border-zinc-800 transition-all hover:translate-x-1 ${
+              className={`p-3 sm:p-4 rounded-lg border-l-4 bg-zinc-900 border border-zinc-800 transition-all hover:translate-x-1 ${
                 alert.level === 'Critical' ? 'border-l-red-500' : 
                 alert.level === 'High' ? 'border-l-orange-500' : 'border-l-blue-500'
               }`}
@@ -158,8 +236,8 @@ const MonitoringTab = ({ onSwitchTab, mode }: { onSwitchTab: (tab: string) => vo
                 <Badge level={alert.level} />
                 <span className="text-[10px] text-zinc-500 font-mono">{alert.timestamp.split(' ')[1]}</span>
               </div>
-              <h3 className="text-sm font-medium text-zinc-200">{alert.type}</h3>
-              <p className="text-xs text-zinc-500 mt-1">{alert.cashier}</p>
+              <h3 className="text-xs sm:text-sm font-medium text-zinc-200">{alert.type}</h3>
+              <p className="text-[10px] sm:text-xs text-zinc-500 mt-1">{alert.cashier}</p>
             </div>
           ))}
         </div>
@@ -176,23 +254,23 @@ const MonitoringTab = ({ onSwitchTab, mode }: { onSwitchTab: (tab: string) => vo
   );
 };
 
-const IncidentsTab = () => {
+const IncidentsTab = ({ incidents }: { incidents: Incident[] }) => {
   const [levelFilter, setLevelFilter] = useState('Все');
   const [statusFilter, setStatusFilter] = useState('Все');
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
-  const filteredIncidents = MOCK_INCIDENTS.filter(inc => {
+  const filteredIncidents = incidents.filter(inc => {
     const levelMatch = levelFilter === 'Все' || inc.level === levelFilter;
     const statusMatch = statusFilter === 'Все' || inc.status === statusFilter;
     return levelMatch && statusMatch;
   });
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Журнал инцидентов</h2>
+    <div className="space-y-4 sm:space-y-6">
+      <h2 className="text-xl sm:text-2xl font-bold">Журнал инцидентов</h2>
       
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 bg-zinc-900/50 p-3 sm:p-4 rounded-lg border border-zinc-800">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Фильтр по уровню</label>
           <select 
@@ -223,16 +301,16 @@ const IncidentsTab = () => {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-zinc-800">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-zinc-900 text-zinc-400 uppercase text-[10px] font-bold tracking-widest border-b border-zinc-800">
+      <div className="overflow-x-auto rounded-lg border border-zinc-800 -mx-4 sm:mx-0">
+        <table className="w-full text-left text-xs sm:text-sm min-w-[600px] sm:min-w-0">
+          <thead className="bg-zinc-900 text-zinc-400 uppercase text-[9px] sm:text-[10px] font-bold tracking-widest border-b border-zinc-800">
             <tr>
-              <th className="px-4 py-3">Дата/время</th>
-              <th className="px-4 py-3">Касса</th>
-              <th className="px-4 py-3">Оператор</th>
-              <th className="px-4 py-3">Тип нарушения</th>
-              <th className="px-4 py-3">Уровень</th>
-              <th className="px-4 py-3">Статус</th>
+              <th className="px-3 sm:px-4 py-3">Дата/время</th>
+              <th className="px-3 sm:px-4 py-3">Касса</th>
+              <th className="hidden sm:table-cell px-4 py-3">Оператор</th>
+              <th className="px-3 sm:px-4 py-3">Тип нарушения</th>
+              <th className="px-3 sm:px-4 py-3">Уровень</th>
+              <th className="px-3 sm:px-4 py-3">Статус</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800 bg-zinc-900/20">
@@ -242,13 +320,13 @@ const IncidentsTab = () => {
                 className="hover:bg-zinc-800/50 cursor-pointer transition-colors"
                 onClick={() => setSelectedIncident(inc)}
               >
-                <td className="px-4 py-3 font-mono text-zinc-400">{inc.timestamp}</td>
-                <td className="px-4 py-3 text-zinc-300">{inc.cashier}</td>
-                <td className="px-4 py-3 text-zinc-300">{inc.operator}</td>
-                <td className="px-4 py-3 text-zinc-200">{inc.type}</td>
-                <td className="px-4 py-3"><Badge level={inc.level} /></td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs ${
+                <td className="px-3 sm:px-4 py-3 font-mono text-zinc-400 whitespace-nowrap">{inc.timestamp.split(' ')[1]}</td>
+                <td className="px-3 sm:px-4 py-3 text-zinc-300">{inc.cashier}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-zinc-300">{inc.operator}</td>
+                <td className="px-3 sm:px-4 py-3 text-zinc-200">{inc.type}</td>
+                <td className="px-3 sm:px-4 py-3"><Badge level={inc.level} /></td>
+                <td className="px-3 sm:px-4 py-3">
+                  <span className={`text-[10px] sm:text-xs ${
                     inc.status === 'Новое' ? 'text-blue-400' : 
                     inc.status === 'В работе' ? 'text-orange-400' : 
                     inc.status === 'Закрыто' ? 'text-zinc-500' : 'text-red-400'
@@ -390,6 +468,27 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
 export default function App() {
   const [activeTab, setActiveTab] = useState('monitoring');
   const [mode, setMode] = useState<'demo' | 'realtime'>('demo');
+  const [customVideoUrl, setCustomVideoUrl] = useState<string | null>(null);
+  const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
+  const [alertFlash, setAlertFlash] = useState(false);
+
+  const handleAlert = useCallback((alert: { type: string; level: 'Critical' | 'High' | 'Medium'; cashier: string }) => {
+    setAlertFlash(true);
+    setTimeout(() => setAlertFlash(false), 500);
+
+    const newIncident: Incident = {
+      id: Date.now(),
+      timestamp: new Date().toISOString().replace('T', ' ').split('.')[0],
+      cashier: alert.cashier,
+      operator: 'AI System',
+      type: alert.type,
+      level: alert.level,
+      status: 'Новое'
+    };
+    
+    // Добавляем в начало списка
+    setIncidents(prev => [newIncident, ...prev].slice(0, 50));
+  }, []);
 
   const tabs = [
     { id: 'monitoring', label: 'Мониторинг СБ', icon: Shield },
@@ -404,11 +503,14 @@ export default function App() {
       <header className="border-b border-zinc-800 bg-[#0e1117]/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-600 p-1.5 rounded-lg">
-                <Shield className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="bg-blue-600 p-1 sm:p-1.5 rounded-lg">
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <h1 className="text-lg font-bold tracking-tight">CASHIER WATCH <span className="text-blue-500 text-xs font-mono ml-1">v2.4</span></h1>
+              <h1 className="text-sm sm:text-lg font-bold tracking-tight">
+                CASHIER <span className="hidden sm:inline">WATCH</span>
+                <span className="text-blue-500 text-[10px] font-mono ml-1">v2.4</span>
+              </h1>
             </div>
             
             <nav className="hidden md:flex items-center gap-1">
@@ -428,24 +530,24 @@ export default function App() {
               ))}
             </nav>
 
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 sm:gap-6">
               {/* Mode Switcher */}
-              <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+              <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 scale-90 sm:scale-100">
                 <button 
                   onClick={() => setMode('demo')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${mode === 'demo' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  className={`px-2 sm:px-3 py-1 text-[9px] sm:text-[10px] font-bold rounded-md transition-all ${mode === 'demo' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
                   DEMO
                 </button>
                 <button 
                   onClick={() => setMode('realtime')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${mode === 'realtime' ? 'bg-red-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  className={`px-2 sm:px-3 py-1 text-[9px] sm:text-[10px] font-bold rounded-md transition-all ${mode === 'realtime' ? 'bg-red-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
-                  REALTIME
+                  LIVE
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800">
                 <div className={`w-2 h-2 rounded-full ${mode === 'realtime' ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">
                   {mode === 'realtime' ? 'Live System' : 'System Online'}
@@ -456,8 +558,26 @@ export default function App() {
         </div>
       </header>
 
+      {/* Mobile Bottom Nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-900/90 backdrop-blur-lg border-t border-zinc-800 z-50 px-4 py-2">
+        <div className="flex items-center justify-around">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex flex-col items-center gap-1 p-2 transition-colors ${
+                activeTab === tab.id ? 'text-blue-400' : 'text-zinc-500'
+              }`}
+            >
+              <tab.icon className="w-5 h-5" />
+              <span className="text-[10px] font-medium">{tab.label.split(' ')[0]}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -466,8 +586,18 @@ export default function App() {
             exit={{ opacity: 0, x: 10 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'monitoring' && <MonitoringTab onSwitchTab={setActiveTab} mode={mode} />}
-            {activeTab === 'incidents' && <IncidentsTab />}
+            {activeTab === 'monitoring' && (
+              <MonitoringTab 
+                onSwitchTab={setActiveTab} 
+                mode={mode} 
+                customVideoUrl={customVideoUrl}
+                setCustomVideoUrl={setCustomVideoUrl}
+                onAlert={handleAlert}
+                incidents={incidents}
+                alertFlash={alertFlash}
+              />
+            )}
+            {activeTab === 'incidents' && <IncidentsTab incidents={incidents} />}
             {activeTab === 'models' && <ModelsPanel />}
             {activeTab === 'tech' && <TechTab mode={mode} />}
           </motion.div>

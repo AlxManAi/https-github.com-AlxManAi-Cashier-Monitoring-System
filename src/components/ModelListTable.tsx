@@ -38,42 +38,44 @@ const ModelListTable: React.FC<ModelListTableProps> = ({ models, selectedModelId
 
   return (
     <div className="bg-[#1e293b] rounded-lg border border-zinc-800 overflow-hidden">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-[#0f172a]/50 text-[#9ca3af] text-xs uppercase font-bold tracking-wider border-b border-zinc-800">
-          <tr>
-            <th className="px-6 py-4">Имя модели</th>
-            <th className="px-6 py-4">Версия</th>
-            <th className="px-6 py-4">Метрики</th>
-            <th className="px-6 py-4">Статус</th>
-            <th className="px-6 py-4">Дата обучения</th>
-            <th className="px-6 py-4">Примечание</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-800">
-          {models.map((model) => (
-            <tr 
-              key={model.id}
-              onClick={() => onSelectModel(model)}
-              className={`cursor-pointer transition-colors ${
-                selectedModelId === model.id 
-                  ? 'bg-[#38bdf8]/10' 
-                  : 'hover:bg-[#0f172a]/30'
-              }`}
-            >
-              <td className="px-6 py-4 font-medium text-[#e5e7eb]">{model.name}</td>
-              <td className="px-6 py-4 text-[#9ca3af] font-mono">{model.version}</td>
-              <td className="px-6 py-4 text-[#38bdf8] text-xs">{formatMetrics(model.metrics)}</td>
-              <td className="px-6 py-4">
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tighter ${getStatusColor(model.status)}`}>
-                  {model.status}
-                </span>
-              </td>
-              <td className="px-6 py-4 text-[#9ca3af] text-xs">{model.trainedAt}</td>
-              <td className="px-6 py-4 text-[#9ca3af] text-xs truncate max-w-[150px]">{model.notes}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm min-w-[800px] md:min-w-full">
+          <thead className="bg-[#0f172a]/50 text-[#9ca3af] text-xs uppercase font-bold tracking-wider border-b border-zinc-800">
+            <tr>
+              <th className="px-4 md:px-6 py-4">Имя модели</th>
+              <th className="px-4 md:px-6 py-4">Версия</th>
+              <th className="px-4 md:px-6 py-4">Метрики</th>
+              <th className="px-4 md:px-6 py-4">Статус</th>
+              <th className="px-4 md:px-6 py-4">Дата обучения</th>
+              <th className="px-4 md:px-6 py-4">Примечание</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-zinc-800">
+            {models.map((model) => (
+              <tr 
+                key={model.id}
+                onClick={() => onSelectModel(model)}
+                className={`cursor-pointer transition-colors ${
+                  selectedModelId === model.id 
+                    ? 'bg-[#38bdf8]/10' 
+                    : 'hover:bg-[#0f172a]/30'
+                }`}
+              >
+                <td className="px-4 md:px-6 py-4 font-medium text-[#e5e7eb] whitespace-nowrap">{model.name}</td>
+                <td className="px-4 md:px-6 py-4 text-[#9ca3af] font-mono whitespace-nowrap">{model.version}</td>
+                <td className="px-4 md:px-6 py-4 text-[#38bdf8] text-xs">{formatMetrics(model.metrics)}</td>
+                <td className="px-4 md:px-6 py-4">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-tighter ${getStatusColor(model.status)}`}>
+                    {model.status}
+                  </span>
+                </td>
+                <td className="px-4 md:px-6 py-4 text-[#9ca3af] text-xs whitespace-nowrap">{model.trainedAt}</td>
+                <td className="px-4 md:px-6 py-4 text-[#9ca3af] text-xs truncate max-w-[150px]">{model.notes}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

@@ -18,12 +18,12 @@ const ModelTypeTabs: React.FC<ModelTypeTabsProps> = ({ activeTab, onTabChange })
   ];
 
   return (
-    <div className="flex border-b border-zinc-800 mb-6">
+    <div className="flex border-b border-zinc-800 mb-6 overflow-x-auto whitespace-nowrap scrollbar-hide">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
-          className={`px-6 py-3 text-sm font-medium transition-all relative ${
+          className={`px-4 md:px-6 py-3 text-sm font-medium transition-all relative flex-shrink-0 ${
             activeTab === tab.id 
               ? 'text-[#38bdf8]' 
               : 'text-[#9ca3af] hover:text-[#e5e7eb]'
