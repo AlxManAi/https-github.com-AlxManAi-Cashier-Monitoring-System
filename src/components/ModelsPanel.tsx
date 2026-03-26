@@ -109,14 +109,14 @@ const ModelsPanel: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 bg-[#0f172a] min-h-screen text-[#e5e7eb]">
-      <header className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Модели и конфигурации</h1>
-          <p className="text-[#9ca3af] text-xs sm:text-sm">Управление версиями нейросетей и программным обеспечением системы.</p>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-1">Модели и конфигурации</h2>
+          <p className="text-[#9ca3af] text-xs sm:text-sm">Управление версиями нейросетей и ПО системы.</p>
         </div>
         
-        <div className="flex bg-[#1e293b] p-1 rounded-lg border border-[#334155] self-start md:self-auto">
+        <div className="flex bg-[#1e293b] p-1 rounded-lg border border-[#334155] self-start md:self-auto shrink-0">
           <button
             onClick={() => setViewMode('ml')}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${

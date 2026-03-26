@@ -19,16 +19,28 @@ import {
   Clock,
   Layers,
   Upload,
-  X
+  X,
+  Database,
+  Edit2,
+  Download,
+  Calendar,
+  Search,
+  Thermometer,
+  Zap,
+  Network,
+  ShieldCheck,
+  HardDrive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ModelsPanel from './components/ModelsPanel';
 import LocalServerHealth from './components/LocalServerHealth';
 import RealTimeAnalyzer from './components/RealTimeAnalyzer';
+import ProcessGraphViewer from './components/ProcessGraphViewer';
+import { useWebSocket, ConnectionStatus } from './hooks/useWebSocket';
 
 // --- Types ---
 interface Incident {
-  id: number;
+  id: number | string;
   timestamp: string;
   cashier: string;
   operator: string;
@@ -36,6 +48,35 @@ interface Incident {
   level: 'Critical' | 'High' | 'Medium';
   status: 'Новое' | 'В работе' | 'Ложное' | 'Закрыто';
 }
+
+interface NotebookData {
+  incidents: Incident[];
+  metadata?: {
+    total: number;
+    timestamp: string;
+  };
+}
+
+// --- Helper Functions ---
+const loadIncidentsFromJSON = async (file: File): Promise<Incident[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string) as NotebookData;
+        if (json && Array.isArray(json.incidents)) {
+          resolve(json.incidents);
+        } else {
+          reject(new Error('Неверный формат JSON: отсутствует массив incidents'));
+        }
+      } catch (err) {
+        reject(new Error('Ошибка парсинга JSON файла'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Ошибка чтения файла'));
+    reader.readAsText(file);
+  });
+};
 
 // --- Mock Data ---
 const MOCK_INCIDENTS: Incident[] = [
@@ -153,18 +194,18 @@ const MonitoringTab = ({
 
         {mode === 'demo' && (
           <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
+                <div className="p-2 bg-blue-500/10 rounded-lg shrink-0">
                   <Play className="w-4 h-4 text-blue-500" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium text-zinc-200">Демонстрационный архив</h3>
-                  <p className="text-xs text-zinc-500">Анализ записанного видеоматериала</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium text-zinc-200 truncate">Демонстрационный архив</h3>
+                  <p className="text-xs text-zinc-500 truncate">Анализ записанного видеоматериала</p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <input 
                   type="file" 
                   ref={fileInputRef} 
@@ -254,10 +295,23 @@ const MonitoringTab = ({
   );
 };
 
-const IncidentsTab = ({ incidents }: { incidents: Incident[] }) => {
+const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload: (data: Incident[]) => void }) => {
   const [levelFilter, setLevelFilter] = useState('Все');
   const [statusFilter, setStatusFilter] = useState('Все');
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      try {
+        const data = await loadIncidentsFromJSON(file);
+        onUpload(data);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Ошибка загрузки файла');
+      }
+    }
+  };
 
   const filteredIncidents = incidents.filter(inc => {
     const levelMatch = levelFilter === 'Все' || inc.level === levelFilter;
@@ -267,7 +321,25 @@ const IncidentsTab = ({ incidents }: { incidents: Incident[] }) => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <h2 className="text-xl sm:text-2xl font-bold">Журнал инцидентов</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h2 className="text-xl sm:text-2xl font-bold">Журнал инцидентов</h2>
+        <div className="flex items-center gap-2">
+          <input 
+            type="file" 
+            accept=".json" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-600/20"
+          >
+            <Upload className="w-4 h-4" />
+            Импорт JSON
+          </button>
+        </div>
+      </div>
       
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 bg-zinc-900/50 p-3 sm:p-4 rounded-lg border border-zinc-800">
@@ -377,88 +449,284 @@ const IncidentsTab = ({ incidents }: { incidents: Incident[] }) => {
 
 const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
   const [logs, setLogs] = useState<string[]>([]);
+  const [logFilter, setLogFilter] = useState({ date: '', hour: '' });
 
   useEffect(() => {
-    const newLogs = Array.from({ length: 10 }).map((_, i) => {
-      const time = new Date().toLocaleTimeString();
+    const newLogs = Array.from({ length: 15 }).map((_, i) => {
+      const time = new Date(Date.now() - i * 1000 * 60 * 5).toLocaleTimeString();
       const prefix = mode === 'realtime' ? 'LIVE' : 'INFO';
-      return `${prefix} 2026-03-06 ${time} Detector: processed frame ${1000 + i}`;
+      return `[${prefix}] 2026-03-20 ${time} - System check: GPU stable at 64°C, processing frame ${5000 - i}`;
     });
     setLogs(newLogs);
   }, [mode]);
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Техническая панель</h2>
-        <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900 rounded-lg border border-zinc-800">
-          <span className="text-[10px] font-bold text-zinc-500 uppercase">Server ID:</span>
-          <span className="text-[10px] font-mono text-blue-400">SRV-LOCAL-01</span>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Системный мониторинг</h2>
+          <p className="text-sm text-zinc-500">Управление аппаратными ресурсами и подключениями</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 rounded-lg border border-zinc-800">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase">Node:</span>
+            <span className="text-[10px] font-mono text-blue-400">SRV-LOCAL-01</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-[10px] font-bold text-emerald-500 uppercase">Air-Gap Active</span>
+          </div>
         </div>
       </div>
 
-      {/* Local Server Health Section */}
+      {/* SECTION 1: GPU PERFORMANCE (Priority 1) */}
       <section className="space-y-4">
-        <h3 className="text-lg font-semibold text-zinc-400 flex items-center gap-2">
-          <Cpu className="w-5 h-5" />
-          Инфраструктура локального сервера
-        </h3>
-        <LocalServerHealth />
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+            <Zap className="w-4 h-4 text-yellow-500" />
+            Производительность GPU (RTX 4090)
+          </h3>
+          <span className="text-[10px] font-bold text-zinc-600 uppercase">Hardware ID: PCI-E 01:00.0</span>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {/* GPU Load */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+            <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Загрузка ядра</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-white">42%</span>
+              <span className="text-xs text-blue-400 font-medium">Stable</span>
+            </div>
+            <div className="mt-3 w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '42%' }}
+                className="h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" 
+              />
+            </div>
+          </div>
+
+          {/* Temperature */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+            <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Температура</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-emerald-400">64°C</span>
+              <span className="text-[10px] text-zinc-600 font-medium">Limit: 85°C</span>
+            </div>
+            <div className="mt-3 flex gap-1">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={i} className={`h-1 flex-1 rounded-full ${i < 8 ? 'bg-emerald-500/40' : 'bg-zinc-800'}`} />
+              ))}
+            </div>
+          </div>
+
+          {/* VRAM */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
+            <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Видеопамять (VRAM)</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-white">8.4 GB</span>
+              <span className="text-[10px] text-zinc-600 font-medium">/ 24 GB</span>
+            </div>
+            <div className="mt-3 w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="h-full bg-purple-500 w-[35%]" />
+            </div>
+          </div>
+
+          {/* FPS */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-orange-500" />
+            <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">FPS Системы</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-orange-400">28.4</span>
+              <span className="text-[10px] text-zinc-600 font-medium">Avg per cam</span>
+            </div>
+            <div className="mt-3 flex items-end gap-0.5 h-4">
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div key={i} className="w-1 bg-orange-500/30 rounded-t-sm" style={{ height: `${Math.random() * 100}%` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* GPU Thresholds Panel (Task 4.2 requirement) */}
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row items-center gap-6">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="p-2 bg-zinc-800 rounded-lg">
+              <Settings className="w-4 h-4 text-zinc-400" />
+            </div>
+            <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Пороги GPU</span>
+          </div>
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-8 w-full">
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] font-bold uppercase">
+                <span className="text-zinc-500">Критическая Temp</span>
+                <span className="text-orange-500">85°C</span>
+              </div>
+              <input type="range" className="w-full accent-orange-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" defaultValue="85" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] font-bold uppercase">
+                <span className="text-zinc-500">Лимит VRAM (GB)</span>
+                <span className="text-blue-500">20.0 GB</span>
+              </div>
+              <input type="range" className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" defaultValue="80" />
+            </div>
+          </div>
+          <button className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold rounded-lg transition-colors uppercase tracking-widest shrink-0 border border-zinc-700">
+            Сохранить
+          </button>
+        </div>
       </section>
 
-      {/* System State */}
-      <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
-        <div className="px-4 py-3 bg-zinc-800/50 border-b border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 text-zinc-400" />
-            <span className="text-sm font-medium">Состояние системы</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${mode === 'realtime' ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} />
-            <span className="text-[10px] font-bold uppercase text-zinc-500">
-              {mode === 'realtime' ? 'Realtime Processing' : 'Demo / Simulation'}
-            </span>
-          </div>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Активных камер</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">1</span>
-              <span className="text-xs text-green-500 font-medium flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                Online
-              </span>
+      {/* SECTION 2: CONNECTIVITY & CAMERAS (Priority 2) */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Camera Management (Micro Admin) */}
+        <div className="xl:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+              <Camera className="w-4 h-4 text-blue-500" />
+              Управление камерами
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">12 / 12 ONLINE</span>
+              <button className="text-[10px] font-bold bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-all shadow-lg shadow-blue-600/20">
+                + ДОБАВИТЬ
+              </button>
             </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Режим</p>
-            <span className="text-3xl font-bold text-white">{mode === 'realtime' ? 'Production' : 'Demo'}</span>
+          
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-1 divide-y divide-zinc-800">
+              {[
+                { id: '01', name: 'Касса №4 (Основная)', url: 'rtsp://admin:secret@192.168.1.104:554/stream1', status: 'active' },
+                { id: '02', name: 'Касса №2 (Резерв)', url: 'rtsp://admin:secret@192.168.1.102:554/stream1', status: 'offline' },
+                { id: '03', name: 'Входная группа', url: 'rtsp://admin:secret@192.168.1.103:554/stream1', status: 'active' },
+              ].map((cam) => (
+                <div key={cam.id} className="p-4 flex items-center gap-4 hover:bg-zinc-800/30 transition-colors group">
+                  <div className="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-500 font-mono text-xs border border-zinc-700 group-hover:border-blue-500/50 transition-colors">
+                    {cam.id}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-zinc-200 truncate">{cam.name}</p>
+                    <p className="text-[10px] font-mono text-zinc-500 truncate">{cam.url}</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${cam.status === 'active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-zinc-600'}`} />
+                      <span className={`text-[10px] font-bold uppercase ${cam.status === 'active' ? 'text-emerald-500' : 'text-zinc-600'}`}>
+                        {cam.status}
+                      </span>
+                    </div>
+                    <button className="p-2 hover:bg-zinc-700 rounded-lg text-zinc-500 hover:text-white transition-colors">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 uppercase font-bold tracking-wider">Задержка обработки</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">145 мс</span>
-              <span className="text-xs text-green-500 font-medium">-12 мс</span>
+        </div>
+
+        {/* Network & Infrastructure (Priority 3) */}
+        <div className="space-y-6">
+          {/* Network Stats */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+              <Network className="w-4 h-4 text-orange-500" />
+              Локальная сеть
+            </h3>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-500">Входящий трафик:</span>
+                <span className="text-sm font-mono font-bold text-white">84 Mbps</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-500">IP Подсеть:</span>
+                <span className="text-sm font-mono text-zinc-300">192.168.10.x</span>
+              </div>
+              <div className="h-px bg-zinc-800" />
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-500">Пакеты (Drop):</span>
+                <span className="text-sm font-mono text-emerald-500">0.02%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Storage */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+              <HardDrive className="w-4 h-4 text-blue-400" />
+              Хранилище
+            </h3>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+              <div className="flex justify-between text-xs mb-2">
+                <span className="text-zinc-500">Заполнено: 7.2 TB / 10 TB</span>
+                <span className="text-blue-400 font-bold">72%</span>
+              </div>
+              <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 w-[72%]" />
+              </div>
+              <div className="mt-4 flex justify-between items-center text-[10px] uppercase font-bold">
+                <span className="text-zinc-600 tracking-wider">Глубина архива:</span>
+                <span className="text-zinc-300">30 дней</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Logs */}
-      <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
-        <div className="px-4 py-3 bg-zinc-800/50 border-b border-zinc-800 flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-zinc-400" />
-          <span className="text-sm font-medium">Логи</span>
-        </div>
-        <div className="p-4 bg-black/40 font-mono text-xs text-zinc-400 space-y-1 max-h-64 overflow-y-auto">
-          {logs.map((log, i) => (
-            <div key={i} className="hover:bg-zinc-800/50 px-2 py-0.5 rounded transition-colors">
-              {log}
+      {/* SECTION 4: ADVANCED LOGS (Priority 4) */}
+      <section className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+            <Terminal className="w-4 h-4 text-zinc-400" />
+            Системный журнал (Retention: 7 дней)
+          </h3>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+              <input 
+                type="text" 
+                placeholder="Поиск по логам..." 
+                className="pl-8 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs focus:outline-none focus:border-blue-500/50 w-40"
+              />
             </div>
-          ))}
+            <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5">
+              <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+              <select className="bg-transparent text-[10px] font-bold uppercase focus:outline-none cursor-pointer">
+                <option>Сегодня</option>
+                <option>Вчера</option>
+                <option>18 Марта</option>
+              </select>
+            </div>
+            <button className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors border border-zinc-700">
+              <Download className="w-3.5 h-3.5" />
+              Экспорт (CSV)
+            </button>
+          </div>
         </div>
-      </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="p-4 bg-black/40 font-mono text-[11px] text-zinc-400 space-y-1.5 h-64 overflow-y-auto custom-scrollbar">
+            {logs.map((log, i) => (
+              <div key={i} className="flex gap-3 hover:bg-zinc-800/50 px-2 py-1 rounded transition-colors group">
+                <span className="text-zinc-600 shrink-0 select-none">{i + 1}</span>
+                <span className="text-zinc-500 shrink-0">[{new Date().toLocaleDateString()}]</span>
+                <span className={log.includes('LIVE') ? 'text-blue-400' : 'text-zinc-400'}>{log}</span>
+              </div>
+            ))}
+          </div>
+          <div className="px-4 py-2 bg-zinc-800/50 border-t border-zinc-800 flex justify-between items-center">
+            <span className="text-[10px] text-zinc-500 font-bold uppercase">Всего записей: 142,502</span>
+            <span className="text-[10px] text-zinc-600 italic">Авто-очистка через 6 дней 22 часа</span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
@@ -471,6 +739,39 @@ export default function App() {
   const [customVideoUrl, setCustomVideoUrl] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
   const [alertFlash, setAlertFlash] = useState(false);
+
+  // WebSocket Configuration
+  const wsUrl = (import.meta as any).env.VITE_WS_URL || 'ws://localhost:8000/ws';
+  
+  const handleWebSocketMessage = useCallback((message: any) => {
+    if (message.type === 'NEW_INCIDENT') {
+      const newIncident = message.data as Incident;
+      setIncidents(prev => [newIncident, ...prev].slice(0, 100));
+      setAlertFlash(true);
+      setTimeout(() => setAlertFlash(false), 500);
+    }
+  }, []);
+
+  const { status: wsStatus, sessionCount } = useWebSocket(wsUrl, handleWebSocketMessage);
+
+  // Автоматическая загрузка данных при старте (если файл доступен на сервере)
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const response = await fetch('/data.json');
+        if (response.ok) {
+          const data = await response.json() as NotebookData;
+          if (data && Array.isArray(data.incidents)) {
+            setIncidents(data.incidents);
+            console.log('Данные успешно загружены из /data.json');
+          }
+        }
+      } catch (err) {
+        console.log('Автозагрузка /data.json не удалась, используем мок-данные');
+      }
+    };
+    fetchInitialData();
+  }, []);
 
   const handleAlert = useCallback((alert: { type: string; level: 'Critical' | 'High' | 'Medium'; cashier: string }) => {
     setAlertFlash(true);
@@ -491,10 +792,11 @@ export default function App() {
   }, []);
 
   const tabs = [
-    { id: 'monitoring', label: 'Мониторинг СБ', icon: Shield },
-    { id: 'incidents', label: 'Журнал инцидентов', icon: History },
-    { id: 'models', label: 'Модели и конфиги', icon: Layers },
-    { id: 'tech', label: 'Тех.панель', icon: Settings },
+    { id: 'monitoring', label: 'Мониторинг', icon: Shield },
+    { id: 'incidents', label: 'Инциденты', icon: History },
+    { id: 'process', label: 'Процессы', icon: Database },
+    { id: 'models', label: 'Модели', icon: Layers },
+    { id: 'tech', label: 'Система', icon: Settings },
   ];
 
   return (
@@ -503,36 +805,57 @@ export default function App() {
       <header className="border-b border-zinc-800 bg-[#0e1117]/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="bg-blue-600 p-1 sm:p-1.5 rounded-lg">
-                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="bg-blue-600 p-1.5 rounded-lg shrink-0">
+                <Shield className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-sm sm:text-lg font-bold tracking-tight">
-                CASHIER <span className="hidden sm:inline">WATCH</span>
-                <span className="text-blue-500 text-[10px] font-mono ml-1">v2.4</span>
+              <h1 className="text-xs xs:text-sm sm:text-base lg:text-lg font-bold tracking-tight whitespace-nowrap flex items-center gap-1">
+                <span>CASHIER</span>
+                <span className="hidden xs:inline">WATCH</span>
+                <span className="text-blue-500 text-[8px] sm:text-[10px] font-mono ml-0.5 hidden xxs:inline">v2.4</span>
               </h1>
             </div>
             
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden lg:flex items-center gap-1 overflow-x-auto no-scrollbar mx-4">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-3 xl:px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
                     activeTab === tab.id 
                       ? 'bg-zinc-800 text-blue-400 shadow-lg shadow-black/20' 
                       : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                   }`}
                 >
                   <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-blue-400' : 'text-zinc-500'}`} />
-                  {tab.label}
+                  <span className="hidden xl:inline">{tab.label}</span>
+                  <span className="xl:hidden">{tab.label.split(' ')[0]}</span>
                 </button>
               ))}
             </nav>
 
-            <div className="flex items-center gap-2 sm:gap-6">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {/* Connection Status Indicator */}
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-zinc-900 rounded-lg border border-zinc-800">
+                <div className={`w-2 h-2 rounded-full ${
+                  wsStatus === ConnectionStatus.OPEN ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
+                  wsStatus === ConnectionStatus.CONNECTING ? 'bg-orange-500 animate-pulse' : 'bg-red-500'
+                }`} />
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase leading-none">
+                    {wsStatus === ConnectionStatus.OPEN ? 'WS Connected' : 
+                     wsStatus === ConnectionStatus.CONNECTING ? 'Connecting...' : 'WS Offline'}
+                  </span>
+                  {wsStatus === ConnectionStatus.OPEN && (
+                    <span className="text-[8px] text-zinc-600 font-mono mt-0.5">
+                      Session: {sessionCount} incidents
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {/* Mode Switcher */}
-              <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800 scale-90 sm:scale-100">
+              <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
                 <button 
                   onClick={() => setMode('demo')}
                   className={`px-2 sm:px-3 py-1 text-[9px] sm:text-[10px] font-bold rounded-md transition-all ${mode === 'demo' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -547,9 +870,9 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800">
+              <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-zinc-900 rounded-full border border-zinc-800 shrink-0">
                 <div className={`w-2 h-2 rounded-full ${mode === 'realtime' ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tighter whitespace-nowrap">
                   {mode === 'realtime' ? 'Live System' : 'System Online'}
                 </span>
               </div>
@@ -559,18 +882,18 @@ export default function App() {
       </header>
 
       {/* Mobile Bottom Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-900/90 backdrop-blur-lg border-t border-zinc-800 z-50 px-4 py-2">
-        <div className="flex items-center justify-around">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-lg border-t border-zinc-800 z-50 px-2 py-2">
+        <div className="flex items-center justify-around max-w-lg mx-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center gap-1 p-2 transition-colors ${
+              className={`flex flex-col items-center gap-1 px-1 py-1.5 transition-colors ${
                 activeTab === tab.id ? 'text-blue-400' : 'text-zinc-500'
               }`}
             >
               <tab.icon className="w-5 h-5" />
-              <span className="text-[10px] font-medium">{tab.label.split(' ')[0]}</span>
+              <span className="text-[9px] font-medium truncate max-w-[60px]">{tab.label}</span>
             </button>
           ))}
         </div>
@@ -597,7 +920,13 @@ export default function App() {
                 alertFlash={alertFlash}
               />
             )}
-            {activeTab === 'incidents' && <IncidentsTab incidents={incidents} />}
+            {activeTab === 'incidents' && (
+              <IncidentsTab 
+                incidents={incidents} 
+                onUpload={(data) => setIncidents(data)} 
+              />
+            )}
+            {activeTab === 'process' && <ProcessGraphViewer />}
             {activeTab === 'models' && <ModelsPanel />}
             {activeTab === 'tech' && <TechTab mode={mode} />}
           </motion.div>
