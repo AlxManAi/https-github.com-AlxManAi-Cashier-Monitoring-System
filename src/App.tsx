@@ -29,7 +29,12 @@ import {
   Zap,
   Network,
   ShieldCheck,
-  HardDrive
+  HardDrive,
+  Video,
+  Maximize2,
+  ExternalLink,
+  Tag,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ModelsPanel from './components/ModelsPanel';
@@ -47,6 +52,10 @@ interface Incident {
   type: string;
   level: 'Critical' | 'High' | 'Medium';
   status: 'Новое' | 'В работе' | 'Ложное' | 'Закрыто';
+  description?: string;
+  videoUrl?: string;
+  screenshotUrl?: string;
+  detectedObjects?: string[];
 }
 
 interface NotebookData {
@@ -80,16 +89,66 @@ const loadIncidentsFromJSON = async (file: File): Promise<Incident[]> => {
 
 // --- Mock Data ---
 const MOCK_INCIDENTS: Incident[] = [
-  { id: 1, timestamp: '2026-03-06 12:45:12', cashier: 'Касса №4', operator: 'Иванов И.И.', type: 'Выдача до проверки', level: 'Critical', status: 'Новое' },
-  { id: 2, timestamp: '2026-03-06 12:44:05', cashier: 'Касса №2', operator: 'Петров П.П.', type: 'Нет проверки подлинности', level: 'High', status: 'В работе' },
-  { id: 3, timestamp: '2026-03-06 12:40:30', cashier: 'Касса №1', operator: 'Сидоров С.С.', type: 'Подозрительная активность', level: 'Medium', status: 'Закрыто' },
-  { id: 4, timestamp: '2026-03-06 12:38:15', cashier: 'Касса №4', operator: 'Иванов И.И.', type: 'Отмена чека без менеджера', level: 'Critical', status: 'Новое' },
-  { id: 5, timestamp: '2026-03-06 12:35:00', cashier: 'Касса №3', operator: 'Кузнецов А.А.', type: 'Лишний товар', level: 'High', status: 'Ложное' },
-  { id: 6, timestamp: '2026-03-06 12:30:22', cashier: 'Касса №2', operator: 'Петров П.П.', type: 'Недосдача', level: 'Medium', status: 'Закрыто' },
-  { id: 7, timestamp: '2026-03-06 12:25:10', cashier: 'Касса №1', operator: 'Сидоров С.С.', type: 'Ошибка сканирования', level: 'Medium', status: 'В работе' },
-  { id: 8, timestamp: '2026-03-06 12:20:05', cashier: 'Касса №4', operator: 'Иванов И.И.', type: 'Выдача до проверки', level: 'Critical', status: 'Новое' },
-  { id: 9, timestamp: '2026-03-06 12:15:40', cashier: 'Касса №3', operator: 'Кузнецов А.А.', type: 'Нет проверки подлинности', level: 'High', status: 'Закрыто' },
-  { id: 10, timestamp: '2026-03-06 12:10:15', cashier: 'Касса №2', operator: 'Петров П.П.', type: 'Подозрительная активность', level: 'Medium', status: 'Новое' },
+  { 
+    id: 1, 
+    timestamp: '2026-03-06 12:45:12', 
+    cashier: 'Касса №4', 
+    operator: 'Иванов И.И.', 
+    type: 'Выдача до проверки', 
+    level: 'Critical', 
+    status: 'Новое',
+    description: 'Система зафиксировала выдачу товара клиенту до завершения процедуры проверки документов. Вероятность нарушения: 98%.',
+    screenshotUrl: 'https://picsum.photos/seed/incident1/800/450',
+    detectedObjects: ['Client', 'Cashier', 'Product', 'Document']
+  },
+  { 
+    id: 2, 
+    timestamp: '2026-03-06 12:44:05', 
+    cashier: 'Касса №2', 
+    operator: 'Петров П.П.', 
+    type: 'Нет проверки подлинности', 
+    level: 'High', 
+    status: 'В работе',
+    description: 'Кассир пропустил этап проверки подлинности купюры крупного номинала через детектор.',
+    screenshotUrl: 'https://picsum.photos/seed/incident2/800/450',
+    detectedObjects: ['Banknote', 'Detector', 'Cashier']
+  },
+  { 
+    id: 3, 
+    timestamp: '2026-03-06 12:40:30', 
+    cashier: 'Касса №1', 
+    operator: 'Сидоров С.С.', 
+    type: 'Подозрительная активность', 
+    level: 'Medium', 
+    status: 'Закрыто',
+    description: 'Зафиксированы повторяющиеся движения рук в зоне кассового ящика без проведения транзакции.',
+    screenshotUrl: 'https://picsum.photos/seed/incident3/800/450',
+    detectedObjects: ['Cash Drawer', 'Hands']
+  },
+  { 
+    id: 4, 
+    timestamp: '2026-03-06 12:38:15', 
+    cashier: 'Касса №4', 
+    operator: 'Иванов И.И.', 
+    type: 'Отмена чека без менеджера', 
+    level: 'Critical', 
+    status: 'Новое',
+    description: 'Произведена полная отмена чека на сумму > 5000 руб. без авторизации старшего смены.',
+    screenshotUrl: 'https://picsum.photos/seed/incident4/800/450',
+    detectedObjects: ['Monitor', 'Receipt']
+  },
+  { 
+    id: 5, 
+    timestamp: '2026-03-06 12:35:00', 
+    cashier: 'Касса №3', 
+    operator: 'Кузнецов А.А.', 
+    type: 'Лишний товар', 
+    level: 'High', 
+    status: 'Ложное',
+    description: 'Детектор зафиксировал передачу товара, который не был отсканирован в текущем чеке.',
+    screenshotUrl: 'https://picsum.photos/seed/incident5/800/450',
+    detectedObjects: ['Product', 'Bag']
+  },
 ];
 
 const MOCK_MODELS = [
@@ -298,8 +357,11 @@ const MonitoringTab = ({
 const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload: (data: Incident[]) => void }) => {
   const [levelFilter, setLevelFilter] = useState('Все');
   const [statusFilter, setStatusFilter] = useState('Все');
+  const [typeFilter, setTypeFilter] = useState('Все');
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const types = ['Все', ...Array.from(new Set(incidents.map(inc => inc.type)))];
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -316,7 +378,8 @@ const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload
   const filteredIncidents = incidents.filter(inc => {
     const levelMatch = levelFilter === 'Все' || inc.level === levelFilter;
     const statusMatch = statusFilter === 'Все' || inc.status === statusFilter;
-    return levelMatch && statusMatch;
+    const typeMatch = typeFilter === 'Все' || inc.type === typeFilter;
+    return levelMatch && statusMatch && typeMatch;
   });
 
   return (
@@ -342,7 +405,7 @@ const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload
       </div>
       
       {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 bg-zinc-900/50 p-3 sm:p-4 rounded-lg border border-zinc-800">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 bg-zinc-900/50 p-3 sm:p-4 rounded-lg border border-zinc-800">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Фильтр по уровню</label>
           <select 
@@ -354,6 +417,18 @@ const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload
             <option>Critical</option>
             <option>High</option>
             <option>Medium</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Фильтр по типу</label>
+          <select 
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {types.map(type => (
+              <option key={type}>{type}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-1.5">
@@ -372,77 +447,250 @@ const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-zinc-800 -mx-4 sm:mx-0">
-        <table className="w-full text-left text-xs sm:text-sm min-w-[600px] sm:min-w-0">
-          <thead className="bg-zinc-900 text-zinc-400 uppercase text-[9px] sm:text-[10px] font-bold tracking-widest border-b border-zinc-800">
-            <tr>
-              <th className="px-3 sm:px-4 py-3">Дата/время</th>
-              <th className="px-3 sm:px-4 py-3">Касса</th>
-              <th className="hidden sm:table-cell px-4 py-3">Оператор</th>
-              <th className="px-3 sm:px-4 py-3">Тип нарушения</th>
-              <th className="px-3 sm:px-4 py-3">Уровень</th>
-              <th className="px-3 sm:px-4 py-3">Статус</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800 bg-zinc-900/20">
-            {filteredIncidents.map((inc) => (
-              <tr 
-                key={inc.id} 
-                className="hover:bg-zinc-800/50 cursor-pointer transition-colors"
-                onClick={() => setSelectedIncident(inc)}
-              >
-                <td className="px-3 sm:px-4 py-3 font-mono text-zinc-400 whitespace-nowrap">{inc.timestamp.split(' ')[1]}</td>
-                <td className="px-3 sm:px-4 py-3 text-zinc-300">{inc.cashier}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-zinc-300">{inc.operator}</td>
-                <td className="px-3 sm:px-4 py-3 text-zinc-200">{inc.type}</td>
-                <td className="px-3 sm:px-4 py-3"><Badge level={inc.level} /></td>
-                <td className="px-3 sm:px-4 py-3">
-                  <span className={`text-[10px] sm:text-xs ${
-                    inc.status === 'Новое' ? 'text-blue-400' : 
-                    inc.status === 'В работе' ? 'text-orange-400' : 
-                    inc.status === 'Закрыто' ? 'text-zinc-500' : 'text-red-400'
-                  }`}>
-                    {inc.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Grid of Cards */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {filteredIncidents.map((inc) => (
+          <motion.div 
+            key={inc.id}
+            layout
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`group relative bg-zinc-900 rounded-xl border overflow-hidden transition-all hover:shadow-2xl hover:shadow-black/50 ${
+              inc.level === 'Critical' ? 'border-red-500/30' : 
+              inc.level === 'High' ? 'border-orange-500/30' : 'border-blue-500/30'
+            }`}
+          >
+            {/* Severity Accent Line */}
+            <div className={`absolute top-0 left-0 w-full h-1 ${
+              inc.level === 'Critical' ? 'bg-red-500' : 
+              inc.level === 'High' ? 'bg-orange-500' : 'bg-blue-500'
+            }`} />
+
+            <div className="p-5 space-y-4">
+              {/* Header */}
+              <div className="flex justify-between items-start gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge level={inc.level} />
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">#{inc.id}</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-white leading-tight">{inc.type}</h3>
+                  <div className="flex items-center gap-3 text-xs text-zinc-400">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {inc.timestamp}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Camera className="w-3 h-3" />
+                      {inc.cashier}
+                    </div>
+                  </div>
+                </div>
+                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest border ${
+                  inc.status === 'Новое' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
+                  inc.status === 'В работе' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 
+                  inc.status === 'Закрыто' ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                }`}>
+                  {inc.status}
+                </div>
+              </div>
+
+              {/* Media Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Screenshot */}
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700 group/media">
+                  <img 
+                    src={inc.screenshotUrl || `https://picsum.photos/seed/${inc.id}/800/450`} 
+                    alt="Incident Screenshot"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/media:opacity-100 transition-opacity flex items-center justify-center">
+                    <Maximize2 className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-[9px] font-bold text-white uppercase tracking-widest border border-white/10">
+                    Screenshot
+                  </div>
+                </div>
+
+                {/* Video Placeholder/Player */}
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center group/video">
+                  <Video className="w-8 h-8 text-zinc-700 group-hover/video:text-blue-500 transition-colors" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-blue-600/10 opacity-0 group-hover/video:opacity-100 transition-opacity">
+                    <Play className="w-10 h-10 text-white fill-white" />
+                  </div>
+                  <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-[9px] font-bold text-white uppercase tracking-widest border border-white/10">
+                    Video Feed
+                  </div>
+                </div>
+              </div>
+
+              {/* Description & Objects */}
+              <div className="space-y-3">
+                <p className="text-sm text-zinc-400 line-clamp-2 leading-relaxed italic">
+                  "{inc.description || 'Система зафиксировала отклонение от стандартного протокола обслуживания. Требуется проверка видеозаписи.'}"
+                </p>
+                
+                <div className="flex flex-wrap gap-2">
+                  {inc.detectedObjects?.map((obj, i) => (
+                    <span key={i} className="flex items-center gap-1 px-2 py-1 bg-zinc-800/50 rounded-md text-[10px] text-zinc-400 border border-zinc-700/50">
+                      <Tag className="w-2.5 h-2.5" />
+                      {obj}
+                    </span>
+                  )) || (
+                    ['Person', 'Cashier', 'Product'].map((obj, i) => (
+                      <span key={i} className="flex items-center gap-1 px-2 py-1 bg-zinc-800/50 rounded-md text-[10px] text-zinc-400 border border-zinc-700/50">
+                        <Tag className="w-2.5 h-2.5" />
+                        {obj}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="pt-4 border-t border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-zinc-500">{inc.operator.charAt(0)}</span>
+                  </div>
+                  <span className="text-xs text-zinc-500">{inc.operator}</span>
+                </div>
+                <button 
+                  onClick={() => setSelectedIncident(inc)}
+                  className="flex items-center gap-2 px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-medium transition-all border border-zinc-700"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Детали
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
       </div>
 
-      {/* Details */}
-      {selectedIncident && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-zinc-900 p-6 rounded-lg border border-zinc-800 space-y-4"
-        >
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Инцидент #{selectedIncident.id}</h3>
-            <button onClick={() => setSelectedIncident(null)} className="text-zinc-500 hover:text-zinc-300">Закрыть</button>
+      {/* Details Modal */}
+      <AnimatePresence>
+        {selectedIncident && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-zinc-900 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-800 shadow-2xl"
+            >
+              <div className="sticky top-0 z-10 bg-zinc-900/80 backdrop-blur-md p-6 border-b border-zinc-800 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <Badge level={selectedIncident.level} />
+                  <h3 className="text-xl font-bold">Инцидент #{selectedIncident.id}</h3>
+                </div>
+                <button 
+                  onClick={() => setSelectedIncident(null)} 
+                  className="p-2 hover:bg-zinc-800 rounded-full text-zinc-500 hover:text-white transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-8">
+                {/* Media Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Видеозапись инцидента</label>
+                    <div className="aspect-video bg-black rounded-xl border border-zinc-800 flex items-center justify-center relative group overflow-hidden">
+                      <Play className="w-16 h-16 text-white/20 group-hover:text-blue-500 transition-all group-hover:scale-110" />
+                      <div className="absolute bottom-4 right-4 flex gap-2">
+                        <button className="p-2 bg-black/60 rounded-lg border border-white/10 text-white hover:bg-black/80">
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 bg-black/60 rounded-lg border border-white/10 text-white hover:bg-black/80">
+                          <Maximize2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ключевой кадр (Screenshot)</label>
+                    <div className="aspect-video bg-zinc-800 rounded-xl border border-zinc-800 overflow-hidden">
+                      <img 
+                        src={selectedIncident.screenshotUrl || `https://picsum.photos/seed/${selectedIncident.id}/800/450`}
+                        alt="Screenshot"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="p-4 bg-zinc-800/30 rounded-xl border border-zinc-800 space-y-1">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Время события</p>
+                    <p className="text-sm font-medium text-zinc-200">{selectedIncident.timestamp}</p>
+                  </div>
+                  <div className="p-4 bg-zinc-800/30 rounded-xl border border-zinc-800 space-y-1">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Локация / Касса</p>
+                    <p className="text-sm font-medium text-zinc-200">{selectedIncident.cashier}</p>
+                  </div>
+                  <div className="p-4 bg-zinc-800/30 rounded-xl border border-zinc-800 space-y-1">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase">Ответственный</p>
+                    <p className="text-sm font-medium text-zinc-200">{selectedIncident.operator}</p>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-blue-400" />
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Аналитический отчет</h4>
+                  </div>
+                  <div className="bg-zinc-800/50 p-6 rounded-2xl border border-zinc-800">
+                    <p className="text-zinc-300 leading-relaxed">
+                      {selectedIncident.description || 'Система зафиксировала отклонение от стандартного протокола обслуживания. Требуется проверка видеозаписи за указанный период. Автоматический детектор действий кассира подтвердил нарушение с высокой степенью вероятности.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Detected Objects */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-emerald-400" />
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Обнаруженные объекты</h4>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {selectedIncident.detectedObjects?.map((obj, i) => (
+                      <div key={i} className="px-4 py-2 bg-zinc-900 rounded-lg border border-zinc-800 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                        <span className="text-xs font-medium text-zinc-300">{obj}</span>
+                      </div>
+                    )) || (
+                      ['Person', 'Cashier', 'Product'].map((obj, i) => (
+                        <div key={i} className="px-4 py-2 bg-zinc-900 rounded-lg border border-zinc-800 flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                          <span className="text-xs font-medium text-zinc-300">{obj}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="pt-6 border-t border-zinc-800 flex flex-col sm:flex-row gap-4">
+                  <button className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20">
+                    Подтвердить нарушение
+                  </button>
+                  <button className="flex-1 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-all border border-zinc-700">
+                    Ложное срабатывание
+                  </button>
+                  <button className="px-6 py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-500 rounded-xl font-bold transition-all border border-zinc-800">
+                    Экспорт отчета
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <p className="text-sm text-zinc-400">Время: <span className="text-zinc-200">{selectedIncident.timestamp}</span></p>
-              <p className="text-sm text-zinc-400">Объект: <span className="text-zinc-200">{selectedIncident.cashier}</span></p>
-              <p className="text-sm text-zinc-400">Сотрудник: <span className="text-zinc-200">{selectedIncident.operator}</span></p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm text-zinc-400">Нарушение: <code className="bg-zinc-800 px-1.5 py-0.5 rounded text-blue-400">{selectedIncident.type}</code></p>
-              <p className="text-sm text-zinc-400">Текущий статус: <span className="text-zinc-200">{selectedIncident.status}</span></p>
-            </div>
-          </div>
-          <div className="bg-zinc-800/50 p-4 rounded border border-zinc-700">
-            <p className="text-sm text-zinc-400 leading-relaxed">
-              <strong>Описание:</strong> Система зафиксировала отклонение от стандартного протокола обслуживания. 
-              Требуется проверка видеозаписи за указанный период. Автоматический детектор действий кассира 
-              подтвердил нарушение с вероятностью 94%.
-            </p>
-          </div>
-        </motion.div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -836,19 +1084,23 @@ export default function App() {
 
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {/* Connection Status Indicator */}
-              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-zinc-900 rounded-lg border border-zinc-800">
-                <div className={`w-2 h-2 rounded-full ${
+              <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 bg-zinc-900 rounded-lg border border-zinc-800 min-w-[85px] sm:min-w-[110px]">
+                <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${
                   wsStatus === ConnectionStatus.OPEN ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
                   wsStatus === ConnectionStatus.CONNECTING ? 'bg-orange-500 animate-pulse' : 'bg-red-500'
                 }`} />
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-bold text-zinc-400 uppercase leading-none">
+                <div className="flex flex-col w-[60px] sm:w-[80px]">
+                  <span className="text-[8px] sm:text-[9px] font-bold text-zinc-400 uppercase leading-none truncate">
                     {wsStatus === ConnectionStatus.OPEN ? 'WS Connected' : 
                      wsStatus === ConnectionStatus.CONNECTING ? 'Connecting...' : 'WS Offline'}
                   </span>
-                  {wsStatus === ConnectionStatus.OPEN && (
-                    <span className="text-[8px] text-zinc-600 font-mono mt-0.5">
-                      Session: {sessionCount} incidents
+                  {wsStatus === ConnectionStatus.OPEN ? (
+                    <span className="text-[7px] sm:text-[8px] text-zinc-600 font-mono mt-0.5 truncate">
+                      Sess: {sessionCount}
+                    </span>
+                  ) : (
+                    <span className="text-[7px] sm:text-[8px] text-zinc-800 font-mono mt-0.5 truncate">
+                      Status: {wsStatus}
                     </span>
                   )}
                 </div>
