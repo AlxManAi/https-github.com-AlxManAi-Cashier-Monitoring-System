@@ -5,6 +5,7 @@ import axios from "axios";
 import { WebSocketServer, WebSocket } from "ws";
 import fs from "fs";
 import { createServer } from "http";
+import Redis from "ioredis";
 
 // --- Types ---
 interface Incident {
@@ -26,6 +27,21 @@ interface Incident {
 const LOG_DIR = path.join(process.cwd(), "logs");
 const CONFIG_FILE = path.join(process.cwd(), "backend", "config.json");
 const WORKFLOW_CONFIG_FILE = path.join(process.cwd(), "backend", "workflow_config.json");
+
+// Redis Setup
+const REDIS_URL = process.env.REDIS_URL;
+let redisPublisher: Redis | null = null;
+let redisSubscriber: Redis | null = null;
+
+if (REDIS_URL) {
+  console.log("Redis URL detected, initializing Redis...");
+  redisPublisher = new Redis(REDIS_URL);
+  redisSubscriber = new Redis(REDIS_URL);
+
+  redisSubscriber.subscribe("incidents", (err) => {
+    if (err) console.error("Failed to subscribe to Redis channel:", err);
+  });
+}
 
 if (!fs.existsSync(LOG_DIR)) {
   fs.mkdirSync(LOG_DIR);
@@ -141,9 +157,30 @@ async function startServer() {
 
   function broadcast(message: any) {
     const data = JSON.stringify(message);
+    
+    // If Redis is active, publish to Redis channel as well
+    if (redisPublisher) {
+      redisPublisher.publish("incidents", data);
+    }
+
     clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(data);
+      }
+    });
+  }
+
+  // Handle Redis subscriptions
+  if (redisSubscriber) {
+    redisSubscriber.on("message", (channel, message) => {
+      if (channel === "incidents") {
+        const data = JSON.parse(message);
+        // Broadcast to local WS clients when a message comes from Redis
+        clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(message);
+          }
+        });
       }
     });
   }
@@ -191,6 +228,33 @@ async function startServer() {
 
   app.get("/api/config", (req, res) => {
     res.json(currentConfig);
+  });
+
+  app.post("/api/config/ml-endpoint", (req, res) => {
+    const { url } = req.body;
+    currentConfig.ml_endpoint = url;
+    saveConfig(currentConfig);
+    logToFile("OPERATOR", "ML Integration URL updated", { url });
+    res.json({ status: "updated", url });
+  });
+
+  // Forward commands to ML Endpoint (e.g., "start_recording", "reset_model")
+  app.post("/api/ml/command", async (req, res) => {
+    const { command, params } = req.body;
+    const mlUrl = currentConfig.ml_endpoint;
+
+    if (!mlUrl) {
+      return res.status(400).json({ error: "ML Endpoint not configured" });
+    }
+
+    try {
+      console.log(`Forwarding command '${command}' to ML Endpoint: ${mlUrl}`);
+      const response = await axios.post(`${mlUrl}/command`, { command, params }, { timeout: 5000 });
+      res.json(response.data);
+    } catch (error: any) {
+      console.error(`Error forwarding command to ML:`, error.message);
+      res.status(502).json({ error: "ML Endpoint unreachable", message: error.message });
+    }
   });
 
   app.post("/api/config/gpu/thresholds", (req, res) => {

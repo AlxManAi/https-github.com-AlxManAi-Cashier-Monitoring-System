@@ -717,6 +717,22 @@ const TechTab = ({ mode, metrics }: { mode: 'demo' | 'realtime', metrics: System
     { id: '03', name: 'Входная группа', url: 'rtsp://admin:secret@192.168.1.103:554/stream1', status: 'active' },
   ]);
   const [editingCamera, setEditingCamera] = useState<string | null>(null);
+  const [mlEndpoint, setMlEndpoint] = useState('');
+
+  const handleSaveMlEndpoint = async () => {
+    try {
+      const response = await fetch('/api/config/ml-endpoint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: mlEndpoint }),
+      });
+      if (response.ok) {
+        alert('URL интеграции ML успешно сохранен');
+      }
+    } catch (err) {
+      console.error('Ошибка при сохранении URL ML:', err);
+    }
+  };
 
   const handleSaveThresholds = async () => {
     try {
@@ -782,6 +798,9 @@ const TechTab = ({ mode, metrics }: { mode: 'demo' | 'realtime', metrics: System
           }
           if (config.cameras) {
             setCameras(config.cameras);
+          }
+          if (config.ml_endpoint) {
+            setMlEndpoint(config.ml_endpoint);
           }
         }
       } catch (err) {
@@ -943,6 +962,41 @@ const TechTab = ({ mode, metrics }: { mode: 'demo' | 'realtime', metrics: System
 
       {/* SECTION 2: CONNECTIVITY & CAMERAS (Priority 2) */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* ML Integration (ngrok) */}
+        <div className="xl:col-span-3 bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-purple-500" />
+              Интеграция с Compliance Engine (Алёна)
+            </h3>
+            <span className="text-[10px] font-bold text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded border border-purple-400/20">Active Tunnel</span>
+          </div>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
+                <Network className="w-4 h-4" />
+              </div>
+              <input 
+                type="text" 
+                placeholder="Введите URL туннеля ngrok (например, https://abcd-123.ngrok-free.app)" 
+                className="w-full pl-10 pr-4 py-3 bg-black border border-zinc-800 rounded-xl text-sm font-mono text-blue-400 focus:outline-none focus:border-purple-500/50 transition-colors"
+                value={mlEndpoint}
+                onChange={(e) => setMlEndpoint(e.target.value)}
+              />
+            </div>
+            <button 
+              onClick={handleSaveMlEndpoint}
+              className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2"
+            >
+              <Zap className="w-4 h-4" />
+              Подключить туннель
+            </button>
+          </div>
+          <p className="text-[10px] text-zinc-500 italic">
+            * Укажите адрес, который выдает ngrok в Colab Алёны. Бэкенд будет использовать этот адрес для получения событий и видеофрагментов.
+          </p>
+        </div>
+
         {/* Camera Management (Micro Admin) */}
         <div className="xl:col-span-2 space-y-4">
           <div className="flex items-center justify-between">

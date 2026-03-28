@@ -100,6 +100,15 @@ send_incident("Касса №4", "Выдача до проверки", "Critical
 
 ---
 
+## 📚 Документация проекта
+
+- [README_DEV.md](./README_DEV.md) — Общая архитектура и запуск сервера.
+- [COLAB_INTEGRATION_TS.MD](./COLAB_INTEGRATION_TS.MD) — Инструкция для ML-разработчиков (Алёна).
+- [PIPELINE_INTEGRATION.md](./PIPELINE_INTEGRATION.md) — **Спецификация сквозного пайплайна (End-to-End)** для всей команды.
+- [API_SPEC.md](./API_SPEC.md) — Техническое описание эндпоинтов.
+
+---
+
 ## 🔮 Будущие возможности (Roadmap)
 1.  **AML/KYC Automation**: Автоматическая сверка лица клиента с фото в паспорте.
 2.  **Transaction Sync**: Наложение данных о транзакции из банковской АБС прямо на видеоряд.
