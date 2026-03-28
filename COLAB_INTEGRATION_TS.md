@@ -1,3 +1,5 @@
+**Old Ver. Not actuai!!!!**
+
 # Техническое Задание: Интеграция Colab -> CashierWatch UI
 
 **Версия:** 1.0  
