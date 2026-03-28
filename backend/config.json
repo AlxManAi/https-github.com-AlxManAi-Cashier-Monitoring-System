@@ -1,0 +1,26 @@
+{
+  "gpu_thresholds": {
+    "temp": 85,
+    "vram": 20.0
+  },
+  "cameras": [
+    {
+      "id": "01",
+      "name": "Касса №4 (Основная)",
+      "url": "rtsp://admin:secret@192.168.1.104:554/stream1",
+      "status": "active"
+    },
+    {
+      "id": "02",
+      "name": "Касса №2 (Резерв)",
+      "url": "rtsp://admin:secret@192.168.1.102:554/stream1",
+      "status": "offline"
+    },
+    {
+      "id": "03",
+      "name": "Входная группа",
+      "url": "rtsp://admin:secret@192.168.1.103:554/stream1",
+      "status": "active"
+    }
+  ]
+}

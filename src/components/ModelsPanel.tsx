@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Model, ModelType } from '../types/models';
+import { Model, ModelType, ModelPerformance } from '../types/models';
 import ActiveModelsSummary from './ActiveModelsSummary';
 import ModelTypeTabs from './ModelTypeTabs';
 import ModelListTable from './ModelListTable';
@@ -11,7 +11,11 @@ import { Cpu, Layers } from 'lucide-react';
  * Панель управления моделями и ПО (версии, статусы, метрики).
  * Основной контейнер раздела "Модели и конфигурации".
  */
-const ModelsPanel: React.FC = () => {
+interface ModelsPanelProps {
+  performance?: ModelPerformance | null;
+}
+
+const ModelsPanel: React.FC<ModelsPanelProps> = ({ performance }) => {
   const [viewMode, setViewMode] = useState<'ml' | 'software'>('ml');
   const [activeTab, setActiveTab] = useState<ModelType>("detector");
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
@@ -77,7 +81,7 @@ const ModelsPanel: React.FC = () => {
       trainedAt: "2026-02-28 16:45",
       metrics: { rules_count: 12, avg_exec_ms: 2 },
       status: "active",
-      notes: "Ядро логики контроля кассиров. Версия с поддержкой мульти-корзин."
+      notes: "Ядро логики контроля кассиров. Версия с поддержкой мульти-валютных операций."
     },
     {
       id: "pe_2",
@@ -87,7 +91,7 @@ const ModelsPanel: React.FC = () => {
       trainedAt: "2026-03-06 12:00",
       metrics: { rules_count: 15, avg_exec_ms: 3 },
       status: "testing",
-      notes: "Бета-версия с новыми правилами проверки весового товара."
+      notes: "Бета-версия с новыми правилами проверки крупных купюр."
     },
     {
       id: "act_1",
@@ -97,7 +101,7 @@ const ModelsPanel: React.FC = () => {
       trainedAt: "2026-03-04 14:00",
       metrics: { accuracy: 0.65 },
       status: "testing",
-      notes: "Первая итерация распознавания действий (сканирование, упаковка)."
+      notes: "Первая итерация распознавания действий (пересчет, проверка подлинности)."
     }
   ];
 
@@ -141,7 +145,7 @@ const ModelsPanel: React.FC = () => {
       {viewMode === 'ml' ? (
         <div className="animate-in fade-in duration-500">
           {/* Сводка активных моделей */}
-          <ActiveModelsSummary />
+          <ActiveModelsSummary performance={performance} />
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Левая часть: Табы и Таблица */}

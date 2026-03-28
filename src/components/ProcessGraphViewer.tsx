@@ -44,21 +44,24 @@ interface MockProcesses {
 // --- Mock Data ---
 const MOCK_PROCESSES: MockProcesses = {
   "currency_exchange": {
-    "name": "Обмен валюты",
+    "name": "Обмен валюты (v2.0)",
     "nodes": [
-      { "id": "start", "label": "Начало", "type": "start", "x": 50, "y": 150 },
-      { "id": "cash_in", "label": "Приём наличных", "type": "process", "x": 180, "y": 150, "mandatory": true },
-      { "id": "auth_check", "label": "Проверка подлинности", "type": "process", "x": 310, "y": 150, "mandatory": true },
-      { "id": "drawer_open", "label": "Открыть ящик", "type": "process", "x": 440, "y": 150, "mandatory": true },
-      { "id": "cash_out", "label": "Выдача наличных", "type": "process", "x": 570, "y": 150 },
-      { "id": "end", "label": "Конец", "type": "end", "x": 700, "y": 150 }
+      { "id": "IDLE", "label": "Ожидание", "type": "start", "x": 30, "y": 150 },
+      { "id": "RECEIVE_CASH", "label": "Прием наличных", "type": "process", "x": 150, "y": 150, "mandatory": true },
+      { "id": "COUNTING", "label": "Пересчет", "type": "process", "x": 270, "y": 150, "mandatory": true },
+      { "id": "CHECKING", "label": "Детектор", "type": "process", "x": 390, "y": 150, "mandatory": true },
+      { "id": "PROCESSING", "label": "Оформление", "type": "process", "x": 510, "y": 150, "mandatory": true },
+      { "id": "DISPENSING", "label": "Выдача", "type": "process", "x": 630, "y": 150 },
+      { "id": "COMPLETE", "label": "Завершено", "type": "end", "x": 750, "y": 150 }
     ],
     "edges": [
-      { "from": "start", "to": "cash_in" },
-      { "from": "cash_in", "to": "auth_check" },
-      { "from": "auth_check", "to": "drawer_open" },
-      { "from": "drawer_open", "to": "cash_out" },
-      { "from": "cash_out", "to": "end" }
+      { "from": "IDLE", "to": "RECEIVE_CASH" },
+      { "from": "RECEIVE_CASH", "to": "COUNTING" },
+      { "from": "COUNTING", "to": "CHECKING" },
+      { "from": "CHECKING", "to": "PROCESSING" },
+      { "from": "PROCESSING", "to": "DISPENSING" },
+      { "from": "DISPENSING", "to": "COMPLETE" },
+      { "from": "COMPLETE", "to": "IDLE" }
     ]
   },
   "payment": {

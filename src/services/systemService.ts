@@ -19,8 +19,9 @@ export interface CameraConfig {
 }
 
 class SystemService {
-  private baseUrl: string = (import.meta as any).env.VITE_API_URL || '';
-  private wsUrl: string = (import.meta as any).env.VITE_WS_URL || '';
+  private baseUrl: string = (import.meta as any).env.VITE_API_URL || window.location.origin;
+  private wsUrl: string = (import.meta as any).env.VITE_WS_URL || 
+    `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
   private socket: WebSocket | null = null;
 
   /**

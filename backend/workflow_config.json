@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "workflow_name": "Currency_Exchange_Compliance_v2",
+    "version": "2.0",
+    "author": "Alena Grechko",
+    "project": "Compliance Control System",
+    "data_source": "cashier_workflow_FINAL_самый актуальный.xlsx",
+    "role": "кассир обменного пункта",
+    "location": "касса"
+  },
+  "workflow_config": {
+    "initial_state": "IDLE",
+    "states": [
+      {
+        "id": "IDLE",
+        "description": "Состояние покоя. Кассир ожидает клиента или операцию.",
+        "is_start": true
+      },
+      {
+        "id": "RECEIVE_CASH",
+        "description": "Прием наличных или документов от клиента (первичное действие)."
+      },
+      {
+        "id": "COUNTING",
+        "description": "Процесс пересчета наличности. Может быть ручным или механическим."
+      },
+      {
+        "id": "CHECKING",
+        "description": "Проверка банкнот на подлинность с использованием детектора."
+      },
+      {
+        "id": "PROCESSING",
+        "description": "Работа в банковском ПО: ввод данных клиента и подтверждение операции."
+      },
+      {
+        "id": "DISPENSING",
+        "description": "Подготовка и выдача наличных/чека клиенту через лоток."
+      },
+      {
+        "id": "COMPLETE",
+        "description": "Финальная точка операции. Система готова к возврату в IDLE.",
+        "is_end": true
+      }
+    ],
+    "transitions": [
+      {
+        "from_state": "IDLE",
+        "to_state": "RECEIVE_CASH",
+        "allowed_actions": ["RECEIVE_CASH"],
+        "description": "Начало операции: получение денег."
+      },
+      {
+        "from_state": "RECEIVE_CASH",
+        "to_state": "COUNTING",
+        "allowed_actions": ["COUNT_CASH_MACHINE", "COUNT_CASH_MANUAL"],
+        "description": "Переход к пересчету."
+      },
+      {
+        "from_state": "COUNTING",
+        "to_state": "CHECKING",
+        "allowed_actions": ["CHECK_CASH_DETECTOR"],
+        "description": "Переход к проверке на детекторе."
+      },
+      {
+        "from_state": "CHECKING",
+        "to_state": "PROCESSING",
+        "allowed_actions": ["INPUT_CLIENT_DATA", "SYSTEM_CONFIRM"],
+        "description": "Ввод данных в систему после проверки."
+      },
+      {
+        "from_state": "PROCESSING",
+        "to_state": "DISPENSING",
+        "allowed_actions": ["PREPARE_CASH_OUT"],
+        "description": "Выдача наличных."
+      },
+      {
+        "from_state": "DISPENSING",
+        "to_state": "COMPLETE",
+        "allowed_actions": ["COMPLETE"],
+        "description": "Завершение операции."
+      },
+      {
+        "from_state": "COMPLETE",
+        "to_state": "IDLE",
+        "allowed_actions": ["IDLE"],
+        "description": "Возврат в режим ожидания."
+      }
+    ],
+    "validation_rules": [
+      {
+        "rule_id": "VR-001",
+        "rule_type": "sequence",
+        "description": "Проверка на детекторе (CHECK_CASH_DETECTOR) должна быть перед выдачей.",
+        "severity": "high"
+      }
+    ]
+  }
+}

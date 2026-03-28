@@ -42,6 +42,7 @@ import LocalServerHealth from './components/LocalServerHealth';
 import RealTimeAnalyzer from './components/RealTimeAnalyzer';
 import ProcessGraphViewer from './components/ProcessGraphViewer';
 import { useWebSocket, ConnectionStatus } from './hooks/useWebSocket';
+import { SystemMetrics, ModelPerformance } from './types/models';
 
 // --- Types ---
 interface Incident {
@@ -97,9 +98,9 @@ const MOCK_INCIDENTS: Incident[] = [
     type: 'Выдача до проверки', 
     level: 'Critical', 
     status: 'Новое',
-    description: 'Система зафиксировала выдачу товара клиенту до завершения процедуры проверки документов. Вероятность нарушения: 98%.',
+    description: 'Система зафиксировала выдачу наличных клиенту до завершения процедуры проверки документов. Вероятность нарушения: 98%.',
     screenshotUrl: 'https://picsum.photos/seed/incident1/800/450',
-    detectedObjects: ['Client', 'Cashier', 'Product', 'Document']
+    detectedObjects: ['Client', 'Cashier', 'Banknote', 'Document']
   },
   { 
     id: 2, 
@@ -130,10 +131,10 @@ const MOCK_INCIDENTS: Incident[] = [
     timestamp: '2026-03-06 12:38:15', 
     cashier: 'Касса №4', 
     operator: 'Иванов И.И.', 
-    type: 'Отмена чека без менеджера', 
+    type: 'Отмена операции без менеджера', 
     level: 'Critical', 
     status: 'Новое',
-    description: 'Произведена полная отмена чека на сумму > 5000 руб. без авторизации старшего смены.',
+    description: 'Произведена полная отмена операции на сумму > 50000 руб. без авторизации старшего смены.',
     screenshotUrl: 'https://picsum.photos/seed/incident4/800/450',
     detectedObjects: ['Monitor', 'Receipt']
   },
@@ -142,12 +143,12 @@ const MOCK_INCIDENTS: Incident[] = [
     timestamp: '2026-03-06 12:35:00', 
     cashier: 'Касса №3', 
     operator: 'Кузнецов А.А.', 
-    type: 'Лишний товар', 
+    type: 'Лишняя купюра', 
     level: 'High', 
     status: 'Ложное',
-    description: 'Детектор зафиксировал передачу товара, который не был отсканирован в текущем чеке.',
+    description: 'Детектор зафиксировал передачу средств, которые не были учтены в текущей операции.',
     screenshotUrl: 'https://picsum.photos/seed/incident5/800/450',
-    detectedObjects: ['Product', 'Bag']
+    detectedObjects: ['Banknote', 'Receipt']
   },
 ];
 
@@ -174,181 +175,192 @@ const Badge = ({ level }: { level: Incident['level'] }) => {
 const MonitoringTab = ({ 
   onSwitchTab, 
   mode, 
-  customVideoUrl, 
-  setCustomVideoUrl,
-  onAlert,
   incidents,
-  alertFlash
+  alertFlash,
+  systemMetrics,
+  modelPerf
 }: { 
   onSwitchTab: (tab: string) => void, 
   mode: 'demo' | 'realtime',
-  customVideoUrl: string | null,
-  setCustomVideoUrl: (url: string | null) => void,
-  onAlert: (alert: { type: string; level: 'Critical' | 'High' | 'Medium'; cashier: string }) => void,
   incidents: Incident[],
-  alertFlash?: boolean
+  alertFlash?: boolean,
+  systemMetrics: SystemMetrics | null,
+  modelPerf: ModelPerformance | null
 }) => {
-  const [demoTime, setDemoTime] = useState(120);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  
+  // Always show the latest incident if none selected
+  const activeIncident = selectedIncident || incidents[0];
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (customVideoUrl) {
-        URL.revokeObjectURL(customVideoUrl);
-      }
-      const url = URL.createObjectURL(file);
-      setCustomVideoUrl(url);
-    }
-  };
-
-  const triggerFileSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
+  const stats = [
+    { label: 'Инцидентов сегодня', value: incidents.length, icon: AlertCircle, color: 'text-red-400' },
+    { label: 'Критических', value: incidents.filter(i => i.level === 'Critical').length, icon: Shield, color: 'text-orange-400' },
+    { label: 'Нагрузка GPU', value: systemMetrics ? `${systemMetrics.gpu_load}%` : '24%', icon: Cpu, color: 'text-blue-400' },
+    { label: 'FPS Анализа', value: modelPerf ? modelPerf.fps.toFixed(1) : '15.4', icon: Zap, color: 'text-emerald-400' },
+  ];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 sm:gap-6">
-      {/* Left Column: Video */}
-      <div className="lg:col-span-7 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-          <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
-            <Camera className="w-5 h-5 text-blue-400" />
-            Видеопоток: Касса №4
-          </h2>
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${mode === 'realtime' ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} />
-            <span className="text-[10px] sm:text-xs text-zinc-500 font-mono uppercase tracking-wider">
-              {mode === 'realtime' ? 'LIVE • 1080p' : 'ARCHIVE • 1080p'}
-            </span>
-          </div>
-        </div>
-        
-        <div className={`aspect-video bg-zinc-900 rounded-lg overflow-hidden border relative group transition-colors duration-300 ${alertFlash ? 'border-red-500 ring-2 ring-red-500/50' : 'border-zinc-800'}`}>
-          {mode === 'realtime' ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90">
-              <div className="relative">
-                <div className="absolute -inset-4 bg-red-500/20 blur-xl rounded-full animate-pulse" />
-                <Camera className="w-12 h-12 text-red-500 relative z-10" />
-              </div>
-              <p className="mt-4 text-sm font-medium text-zinc-300">Ожидание потока с камеры...</p>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Protocol: RTSP/ONVIF</p>
+    <div className="space-y-6">
+      {/* Dashboard Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat, i) => (
+          <div key={i} className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl flex items-center gap-4">
+            <div className={`p-2 bg-zinc-800 rounded-lg ${stat.color}`}>
+              <stat.icon className="w-5 h-5" />
             </div>
-          ) : (
-            <RealTimeAnalyzer 
-              videoUrl={customVideoUrl || "https://storage.googleapis.com/mediapipe-assets/business-person-working-on-laptop.mp4"} 
-              isActive={mode === 'demo'} 
-              onAlert={onAlert}
-            />
-          )}
-          <div className="absolute top-4 left-4 bg-black/60 px-2 py-1 rounded text-[10px] font-mono text-green-400 border border-green-500/30 pointer-events-none z-20">
-            DETECTOR ACTIVE: 98% CONF
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">{stat.label}</p>
+              <p className="text-xl font-bold text-white">{stat.value}</p>
+            </div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        {mode === 'demo' && (
-          <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg shrink-0">
-                  <Play className="w-4 h-4 text-blue-500" />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left: Detailed View of Selected Incident */}
+        <div className="lg:col-span-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Eye className="w-5 h-5 text-blue-400" />
+              Детали нарушения
+            </h2>
+            {activeIncident && (
+              <div className="flex items-center gap-2">
+                <Badge level={activeIncident.level} />
+                <span className="text-xs text-zinc-500 font-mono">ID: {activeIncident.id}</span>
+              </div>
+            )}
+          </div>
+
+          {activeIncident ? (
+            <div className={`bg-zinc-900 rounded-2xl border-2 transition-all duration-500 overflow-hidden ${alertFlash ? 'border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'border-zinc-800'}`}>
+              <div className="aspect-video relative bg-black group">
+                <img 
+                  src={activeIncident.screenshotUrl || `https://picsum.photos/seed/${activeIncident.id}/1280/720`} 
+                  alt="Incident"
+                  className="w-full h-full object-cover opacity-80"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent" />
+                
+                {/* Overlay Info */}
+                <div className="absolute bottom-6 left-6 right-6 flex items-end justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-mono text-zinc-400 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 w-fit">
+                      <Clock className="w-3 h-3" />
+                      {activeIncident.timestamp}
+                    </div>
+                    <h3 className="text-2xl font-bold text-white">{activeIncident.type}</h3>
+                    <p className="text-zinc-300 max-w-xl text-sm italic">
+                      "{activeIncident.description || 'Обнаружено отклонение от стандартного протокола обслуживания.'}"
+                    </p>
+                  </div>
+                  <button className="p-4 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-xl shadow-blue-600/20 transition-transform hover:scale-110">
+                    <Play className="w-6 h-6 fill-white" />
+                  </button>
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-medium text-zinc-200 truncate">Демонстрационный архив</h3>
-                  <p className="text-xs text-zinc-500 truncate">Анализ записанного видеоматериала</p>
+
+                <div className="absolute top-6 right-6 flex flex-col gap-2">
+                  <div className="px-3 py-1.5 bg-red-600/20 backdrop-blur-md border border-red-500/50 rounded text-[10px] font-bold text-red-400 uppercase tracking-widest animate-pulse">
+                    Incident Detected
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 border-t border-zinc-800">
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-zinc-500">Объект контроля</p>
+                  <p className="text-sm font-medium text-zinc-200">{activeIncident.cashier}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-zinc-500">Оператор ИИ</p>
+                  <p className="text-sm font-medium text-zinc-200">{activeIncident.operator}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-zinc-500">Статус</p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <p className="text-sm font-medium text-zinc-200">{activeIncident.status}</p>
+                  </div>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 shrink-0">
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  accept="video/*" 
-                  className="hidden" 
-                />
+              <div className="px-6 py-4 bg-zinc-950/50 border-t border-zinc-800 flex items-center justify-between">
+                <div className="flex gap-2">
+                  {activeIncident.detectedObjects?.map((obj, i) => (
+                    <span key={i} className="px-2 py-1 bg-zinc-800 rounded text-[10px] text-zinc-400 border border-zinc-700">
+                      {obj}
+                    </span>
+                  ))}
+                </div>
                 <button 
-                  onClick={triggerFileSelect}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md text-xs font-medium transition-colors border border-zinc-700"
+                  onClick={() => onSwitchTab('incidents')}
+                  className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
                 >
-                  <Upload className="w-3.5 h-3.5" />
-                  {customVideoUrl ? 'Сменить видео' : 'Загрузить свое видео'}
+                  Открыть в журнале
+                  <ExternalLink className="w-3 h-3" />
                 </button>
-                
-                {customVideoUrl && (
-                  <button 
-                    onClick={() => {
-                      if (customVideoUrl) URL.revokeObjectURL(customVideoUrl);
-                      setCustomVideoUrl(null);
-                    }}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
-                    title="Сбросить"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
               </div>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Текущее время демо
-                </label>
-                <span className="text-sm font-mono text-blue-400">{formatTime(demoTime)} / 09:00</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="540" 
-                value={demoTime} 
-                onChange={(e) => setDemoTime(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
+          ) : (
+            <div className="aspect-video bg-zinc-900 rounded-2xl border border-zinc-800 flex flex-col items-center justify-center text-zinc-500">
+              <ShieldCheck className="w-16 h-16 opacity-20 mb-4" />
+              <p>Инцидентов не зафиксировано</p>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Right Column: Alerts */}
-      <div className="lg:col-span-3 space-y-4">
-        <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2 mb-2">
-          <AlertCircle className="w-5 h-5 text-red-400" />
-          Активные алерты
-        </h2>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-          {incidents.slice(0, 4).map((alert) => (
-            <div 
-              key={alert.id}
-              className={`p-3 sm:p-4 rounded-lg border-l-4 bg-zinc-900 border border-zinc-800 transition-all hover:translate-x-1 ${
-                alert.level === 'Critical' ? 'border-l-red-500' : 
-                alert.level === 'High' ? 'border-l-orange-500' : 'border-l-blue-500'
-              }`}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <Badge level={alert.level} />
-                <span className="text-[10px] text-zinc-500 font-mono">{alert.timestamp.split(' ')[1]}</span>
-              </div>
-              <h3 className="text-xs sm:text-sm font-medium text-zinc-200">{alert.type}</h3>
-              <p className="text-[10px] sm:text-xs text-zinc-500 mt-1">{alert.cashier}</p>
-            </div>
-          ))}
+          )}
         </div>
 
-        <button 
-          onClick={() => onSwitchTab('incidents')}
-          className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-        >
-          Показать все инциденты
-          <ChevronRight className="w-4 h-4" />
-        </button>
+        {/* Right: Live Feed of Incidents */}
+        <div className="lg:col-span-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <History className="w-5 h-5 text-red-400" />
+              Лента событий
+            </h2>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
+              Live
+            </span>
+          </div>
+
+          <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+            {incidents.map((incident) => (
+              <motion.div 
+                key={incident.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                onClick={() => setSelectedIncident(incident)}
+                className={`p-4 rounded-xl border cursor-pointer transition-all hover:translate-x-1 ${
+                  activeIncident?.id === incident.id 
+                    ? 'bg-blue-600/10 border-blue-500/50 ring-1 ring-blue-500/20' 
+                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <Badge level={incident.level} />
+                  <span className="text-[10px] text-zinc-500 font-mono">{incident.timestamp.split(' ')[1]}</span>
+                </div>
+                <h3 className={`text-sm font-bold truncate ${activeIncident?.id === incident.id ? 'text-blue-400' : 'text-zinc-200'}`}>
+                  {incident.type}
+                </h3>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-[10px] text-zinc-500">{incident.cashier}</span>
+                  <div className="flex items-center gap-1 text-[10px] text-zinc-400">
+                    <Info className="w-3 h-3" />
+                    Подробнее
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          <button 
+            onClick={() => onSwitchTab('incidents')}
+            className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-sm font-bold transition-all border border-zinc-700 flex items-center justify-center gap-2"
+          >
+            Архив инцидентов
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -538,7 +550,7 @@ const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload
                       {obj}
                     </span>
                   )) || (
-                    ['Person', 'Cashier', 'Product'].map((obj, i) => (
+                    ['Person', 'Cashier', 'Banknote'].map((obj, i) => (
                       <span key={i} className="flex items-center gap-1 px-2 py-1 bg-zinc-800/50 rounded-md text-[10px] text-zinc-400 border border-zinc-700/50">
                         <Tag className="w-2.5 h-2.5" />
                         {obj}
@@ -695,18 +707,99 @@ const IncidentsTab = ({ incidents, onUpload }: { incidents: Incident[], onUpload
   );
 };
 
-const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
+const TechTab = ({ mode, metrics }: { mode: 'demo' | 'realtime', metrics: SystemMetrics | null }) => {
   const [logs, setLogs] = useState<string[]>([]);
-  const [logFilter, setLogFilter] = useState({ date: '', hour: '' });
+  const [gpuThresholdTemp, setGpuThresholdTemp] = useState(85);
+  const [gpuThresholdVram, setGpuThresholdVram] = useState(20.0);
+  const [cameras, setCameras] = useState([
+    { id: '01', name: 'Касса №4 (Основная)', url: 'rtsp://admin:secret@192.168.1.104:554/stream1', status: 'active' },
+    { id: '02', name: 'Касса №2 (Резерв)', url: 'rtsp://admin:secret@192.168.1.102:554/stream1', status: 'offline' },
+    { id: '03', name: 'Входная группа', url: 'rtsp://admin:secret@192.168.1.103:554/stream1', status: 'active' },
+  ]);
+  const [editingCamera, setEditingCamera] = useState<string | null>(null);
+
+  const handleSaveThresholds = async () => {
+    try {
+      const response = await fetch('/api/config/gpu/thresholds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ temp: gpuThresholdTemp, vram: gpuThresholdVram }),
+      });
+      if (response.ok) {
+        alert('Пороги GPU успешно сохранены');
+      }
+    } catch (err) {
+      console.error('Ошибка при сохранении порогов:', err);
+    }
+  };
+
+  const handleUpdateCamera = async (id: string, newUrl: string) => {
+    try {
+      const response = await fetch('/api/config/camera/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, url: newUrl }),
+      });
+      if (response.ok) {
+        setCameras(prev => prev.map(cam => cam.id === id ? { ...cam, url: newUrl } : cam));
+        setEditingCamera(null);
+      }
+    } catch (err) {
+      console.error('Ошибка при обновлении камеры:', err);
+    }
+  };
+
+  const handleExportLogs = async () => {
+    try {
+      const response = await fetch('/api/logs/export?level=SECURITY');
+      if (response.ok) {
+        const data = await response.json();
+        const blob = new Blob([data.content], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = data.filename.split('/').pop();
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert('Лог-файл пуст или не найден на сервере.');
+      }
+    } catch (err) {
+      console.error('Ошибка при экспорте логов:', err);
+      alert('Ошибка при экспорте логов. Убедитесь, что бэкенд запущен.');
+    }
+  };
 
   useEffect(() => {
-    const newLogs = Array.from({ length: 15 }).map((_, i) => {
-      const time = new Date(Date.now() - i * 1000 * 60 * 5).toLocaleTimeString();
-      const prefix = mode === 'realtime' ? 'LIVE' : 'INFO';
-      return `[${prefix}] 2026-03-20 ${time} - System check: GPU stable at 64°C, processing frame ${5000 - i}`;
-    });
-    setLogs(newLogs);
-  }, [mode]);
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          if (config.gpu_thresholds) {
+            setGpuThresholdTemp(config.gpu_thresholds.temp);
+            setGpuThresholdVram(config.gpu_thresholds.vram);
+          }
+          if (config.cameras) {
+            setCameras(config.cameras);
+          }
+        }
+      } catch (err) {
+        console.log('Backend config not available, using defaults');
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  // Use real metrics if available, otherwise mock
+  const gpuLoad = metrics?.gpu.load ?? 42;
+  const gpuTemp = metrics?.gpu.temp ?? 64;
+  const vramUsed = metrics?.gpu.vram_used ?? 8.4;
+  const vramTotal = metrics?.gpu.vram_total ?? 24;
+  const netIn = metrics?.network.in_mbps ?? 84;
+  const storageUsed = metrics?.storage.used_gb ?? 7200;
+  const storageTotal = metrics?.storage.total_gb ?? 10000;
+  const storagePercent = Math.round((storageUsed / storageTotal) * 100);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -744,13 +837,13 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
             <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
             <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Загрузка ядра</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">42%</span>
+              <span className="text-3xl font-bold text-white">{gpuLoad}%</span>
               <span className="text-xs text-blue-400 font-medium">Stable</span>
             </div>
             <div className="mt-3 w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
-                animate={{ width: '42%' }}
+                animate={{ width: `${gpuLoad}%` }}
                 className="h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" 
               />
             </div>
@@ -761,13 +854,16 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
             <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
             <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Температура</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-emerald-400">64°C</span>
+              <span className="text-3xl font-bold text-emerald-400">{gpuTemp}°C</span>
               <span className="text-[10px] text-zinc-600 font-medium">Limit: 85°C</span>
             </div>
             <div className="mt-3 flex gap-1">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className={`h-1 flex-1 rounded-full ${i < 8 ? 'bg-emerald-500/40' : 'bg-zinc-800'}`} />
-              ))}
+              {Array.from({ length: 12 }).map((_, i) => {
+                const activeBars = Math.round((gpuTemp / 100) * 12);
+                return (
+                  <div key={i} className={`h-1 flex-1 rounded-full ${i < activeBars ? 'bg-emerald-500/40' : 'bg-zinc-800'}`} />
+                );
+              })}
             </div>
           </div>
 
@@ -776,11 +872,11 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
             <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
             <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Видеопамять (VRAM)</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-white">8.4 GB</span>
-              <span className="text-[10px] text-zinc-600 font-medium">/ 24 GB</span>
+              <span className="text-3xl font-bold text-white">{vramUsed.toFixed(1)} GB</span>
+              <span className="text-[10px] text-zinc-600 font-medium">/ {vramTotal} GB</span>
             </div>
             <div className="mt-3 w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
-              <div className="h-full bg-purple-500 w-[35%]" />
+              <div className="h-full bg-purple-500" style={{ width: `${(vramUsed / vramTotal) * 100}%` }} />
             </div>
           </div>
 
@@ -812,19 +908,34 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
             <div className="space-y-2">
               <div className="flex justify-between text-[10px] font-bold uppercase">
                 <span className="text-zinc-500">Критическая Temp</span>
-                <span className="text-orange-500">85°C</span>
+                <span className="text-orange-500">{gpuThresholdTemp}°C</span>
               </div>
-              <input type="range" className="w-full accent-orange-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" defaultValue="85" />
+              <input 
+                type="range" 
+                className="w-full accent-orange-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" 
+                min="60" max="100"
+                value={gpuThresholdTemp}
+                onChange={(e) => setGpuThresholdTemp(parseInt(e.target.value))}
+              />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-[10px] font-bold uppercase">
                 <span className="text-zinc-500">Лимит VRAM (GB)</span>
-                <span className="text-blue-500">20.0 GB</span>
+                <span className="text-blue-500">{gpuThresholdVram.toFixed(1)} GB</span>
               </div>
-              <input type="range" className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" defaultValue="80" />
+              <input 
+                type="range" 
+                className="w-full accent-blue-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" 
+                min="8" max="24" step="0.5"
+                value={gpuThresholdVram}
+                onChange={(e) => setGpuThresholdVram(parseFloat(e.target.value))}
+              />
             </div>
           </div>
-          <button className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold rounded-lg transition-colors uppercase tracking-widest shrink-0 border border-zinc-700">
+          <button 
+            onClick={handleSaveThresholds}
+            className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold rounded-lg transition-colors uppercase tracking-widest shrink-0 border border-zinc-700"
+          >
             Сохранить
           </button>
         </div>
@@ -849,18 +960,27 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
           
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
             <div className="grid grid-cols-1 divide-y divide-zinc-800">
-              {[
-                { id: '01', name: 'Касса №4 (Основная)', url: 'rtsp://admin:secret@192.168.1.104:554/stream1', status: 'active' },
-                { id: '02', name: 'Касса №2 (Резерв)', url: 'rtsp://admin:secret@192.168.1.102:554/stream1', status: 'offline' },
-                { id: '03', name: 'Входная группа', url: 'rtsp://admin:secret@192.168.1.103:554/stream1', status: 'active' },
-              ].map((cam) => (
+              {cameras.map((cam) => (
                 <div key={cam.id} className="p-4 flex items-center gap-4 hover:bg-zinc-800/30 transition-colors group">
                   <div className="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-500 font-mono text-xs border border-zinc-700 group-hover:border-blue-500/50 transition-colors">
                     {cam.id}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-zinc-200 truncate">{cam.name}</p>
-                    <p className="text-[10px] font-mono text-zinc-500 truncate">{cam.url}</p>
+                    {editingCamera === cam.id ? (
+                      <input 
+                        type="text"
+                        className="w-full bg-black border border-zinc-700 rounded px-2 py-1 text-[10px] font-mono text-blue-400 focus:outline-none focus:border-blue-500"
+                        defaultValue={cam.url}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleUpdateCamera(cam.id, (e.target as HTMLInputElement).value);
+                          if (e.key === 'Escape') setEditingCamera(null);
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <p className="text-[10px] font-mono text-zinc-500 truncate">{cam.url}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -869,7 +989,10 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
                         {cam.status}
                       </span>
                     </div>
-                    <button className="p-2 hover:bg-zinc-700 rounded-lg text-zinc-500 hover:text-white transition-colors">
+                    <button 
+                      onClick={() => setEditingCamera(editingCamera === cam.id ? null : cam.id)}
+                      className="p-2 hover:bg-zinc-700 rounded-lg text-zinc-500 hover:text-white transition-colors"
+                    >
                       <Edit2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -890,7 +1013,7 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-xs text-zinc-500">Входящий трафик:</span>
-                <span className="text-sm font-mono font-bold text-white">84 Mbps</span>
+                <span className="text-sm font-mono font-bold text-white">{netIn} Mbps</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-zinc-500">IP Подсеть:</span>
@@ -912,11 +1035,11 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
             </h3>
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
               <div className="flex justify-between text-xs mb-2">
-                <span className="text-zinc-500">Заполнено: 7.2 TB / 10 TB</span>
-                <span className="text-blue-400 font-bold">72%</span>
+                <span className="text-zinc-500">Заполнено: {(storageUsed / 1000).toFixed(1)} TB / {(storageTotal / 1000).toFixed(1)} TB</span>
+                <span className="text-blue-400 font-bold">{storagePercent}%</span>
               </div>
               <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 w-[72%]" />
+                <div className="h-full bg-blue-500" style={{ width: `${storagePercent}%` }} />
               </div>
               <div className="mt-4 flex justify-between items-center text-[10px] uppercase font-bold">
                 <span className="text-zinc-600 tracking-wider">Глубина архива:</span>
@@ -952,9 +1075,12 @@ const TechTab = ({ mode }: { mode: 'demo' | 'realtime' }) => {
                 <option>18 Марта</option>
               </select>
             </div>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors border border-zinc-700">
+            <button 
+              onClick={handleExportLogs}
+              className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors border border-zinc-700"
+            >
               <Download className="w-3.5 h-3.5" />
-              Экспорт (CSV)
+              Экспорт (JSONL)
             </button>
           </div>
         </div>
@@ -987,9 +1113,12 @@ export default function App() {
   const [customVideoUrl, setCustomVideoUrl] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
   const [alertFlash, setAlertFlash] = useState(false);
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
+  const [modelPerf, setModelPerf] = useState<ModelPerformance | null>(null);
 
   // WebSocket Configuration
-  const wsUrl = (import.meta as any).env.VITE_WS_URL || 'ws://localhost:8000/ws';
+  const wsUrl = (import.meta as any).env.VITE_WS_URL || 
+    `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
   
   const handleWebSocketMessage = useCallback((message: any) => {
     if (message.type === 'NEW_INCIDENT') {
@@ -997,6 +1126,10 @@ export default function App() {
       setIncidents(prev => [newIncident, ...prev].slice(0, 100));
       setAlertFlash(true);
       setTimeout(() => setAlertFlash(false), 500);
+    } else if (message.type === 'SYSTEM_METRICS') {
+      setSystemMetrics(message.data);
+    } else if (message.type === 'MODEL_PERFORMANCE') {
+      setModelPerf(message.data);
     }
   }, []);
 
@@ -1165,11 +1298,10 @@ export default function App() {
               <MonitoringTab 
                 onSwitchTab={setActiveTab} 
                 mode={mode} 
-                customVideoUrl={customVideoUrl}
-                setCustomVideoUrl={setCustomVideoUrl}
-                onAlert={handleAlert}
                 incidents={incidents}
                 alertFlash={alertFlash}
+                systemMetrics={systemMetrics}
+                modelPerf={modelPerf}
               />
             )}
             {activeTab === 'incidents' && (
@@ -1179,8 +1311,8 @@ export default function App() {
               />
             )}
             {activeTab === 'process' && <ProcessGraphViewer />}
-            {activeTab === 'models' && <ModelsPanel />}
-            {activeTab === 'tech' && <TechTab mode={mode} />}
+            {activeTab === 'models' && <ModelsPanel performance={modelPerf} />}
+            {activeTab === 'tech' && <TechTab mode={mode} metrics={systemMetrics} />}
           </motion.div>
         </AnimatePresence>
       </main>
